@@ -74,7 +74,8 @@ my %ttsQuality       = ("Google"     => "",
                        );
 my %ttsMaxChar      = ("Google"     => 100,
                        "VoiceRSS"   => 300,
-                       "SVOX-pico"  => 1000
+                       "SVOX-pico"  => 1000,
+                       "Amazon-Polly" => 100000
                        );
 my %language        = ("Google"     =>  {"Deutsch"        => "de",
                                          "English-US"     => "en-us",
@@ -90,8 +91,6 @@ my %language        = ("Google"     =>  {"Deutsch"        => "de",
                        "VoiceRSS"   =>  {"Deutsch"        => "de-de",
                                          "English-US"     => "en-us",
                                          "Schwedisch"     => "sv-se",
-                                         "Indian-Hindi"   => "en-in", # gibts nicht
-                                         "Arabic"         => "en-us", # gibts nicht
                                          "France"         => "fr-fr",
                                          "Spain"          => "es-es",
                                          "Italian"        => "it-it",
@@ -99,13 +98,11 @@ my %language        = ("Google"     =>  {"Deutsch"        => "de",
                                          },
                         "SVOX-pico" =>  {"Deutsch"        => "de-DE",
                                          "English-US"     => "en-US",
-                                         "Schwedisch"     => "en-US", # gibts nicht
-                                         "Indian-Hindi"   => "en-US", # gibts nicht
-                                         "Arabic"         => "en-US", # gibts nicht
                                          "France"         => "fr-FR",
                                          "Spain"          => "es-ES",
-                                         "Italian"        => "it-IT",
-                                         "Chinese"        => "en-US"  # gibts nicht
+                                         "Italian"        => "it-IT"
+                                         },
+                        "Amazon-Polly"=> {"Deutsch"       => "Marlene"
                                          }
                       );
 
@@ -121,7 +118,7 @@ sub Text2Speech_Initialize($)
   $hash->{AttrFn}    = "Text2Speech_Attr";
   $hash->{AttrList}  = "disable:0,1".
                        " TTS_Delemiter".
-                       " TTS_Ressource:ESpeak,SVOX-pico,". join(",", sort keys %ttsHost).
+                       " TTS_Ressource:ESpeak,SVOX-pico,Amazon-Polly,". join(",", sort keys %ttsHost).
                        " TTS_APIKey".
                        " TTS_User".
                        " TTS_Quality:".
@@ -777,6 +774,11 @@ sub Text2Speech_Download($$$) {
       Log3 $hash, 4, $hash->{NAME}.":" .$cmd;
       system($cmd);
     unlink $FileWav;
+  } elsif ($TTS_Ressource eq "Amazon-Polly") {
+    # aws polly synthesize-speech --output-format mp3 --voice-id Marlene --text '%text%' abc.mp3
+    $cmd = "aws polly synthesize-speech --output-format mp3 --voice-id " . $language{$TTS_Ressource}{$TTS_Language} . " --text '" . $text . "' " . $file;
+    Log3 $hash, 4, $hash->{NAME}.":" .$cmd;
+    system($cmd);
   }
 }
 
