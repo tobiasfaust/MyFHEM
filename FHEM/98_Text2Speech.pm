@@ -39,12 +39,11 @@ my %sets = (
 );
 
 # path to mplayer
-my $mplayer 			= 'sudo /usr/bin/mplayer';
-#my $mplayerOpts 		= '-nolirc -noconsolecontrols -http-header-fields "User-Agent:Mozilla/5.0 (Windows NT 6.2; WOW64) AppleWebKit/537.22 (KHTML, like Gecko) Chrome/25.0.1364.172 Safari/537.22m"';
-my $mplayerOpts     = '-nolirc -noconsolecontrols';
-my $mplayerNoDebug  = '-really-quiet';
-my $mplayerAudioOpts 	= '-ao alsa:device=';
-#my $ttsAddr 			= 'http://translate.google.com/translate_tts?tl=de&q=';
+my $mplayer 		  = 'sudo /usr/bin/mplayer';
+my $mplayerOpts       = '-nolirc -noconsolecontrols';
+my $mplayerNoDebug    = '-really-quiet';
+my $mplayerAudioOpts  = '-ao alsa:device=';
+
 my %ttsHost         = ("Google"     => "translate.google.com",
                        "VoiceRSS"   => "api.voicerss.org"
                        );
@@ -77,32 +76,38 @@ my %ttsMaxChar      = ("Google"     => 100,
                        "SVOX-pico"  => 1000,
                        "Amazon-Polly" => 100000
                        );
-my %language        = ("Google"     =>  {"Deutsch"        => "de",
-                                         "English-US"     => "en-us",
-                                         "Schwedisch"     => "sv",
-                                         "Indian-Hindi"   => "hi",
-                                         "Arabic"         => "ar",
-                                         "France"         => "fr",
-                                         "Spain"          => "es",
-                                         "Italian"        => "it",
-                                         "Chinese"        => "cn",
-                                         "Dutch"          => "nl"
+my %language        = ("Google"     =>  { "Deutsch"       => "de",
+                                          "English-US"    => "en-us",
+                                          "Schwedisch"    => "sv",
+                                          "France"        => "fr",
+                                          "Spain"         => "es",
+                                          "Italian"       => "it",
+                                          "Chinese"       => "cn",
+                                          "Dutch"         => "nl"
                                          },
-                       "VoiceRSS"   =>  {"Deutsch"        => "de-de",
-                                         "English-US"     => "en-us",
-                                         "Schwedisch"     => "sv-se",
-                                         "France"         => "fr-fr",
-                                         "Spain"          => "es-es",
-                                         "Italian"        => "it-it",
-                                         "Chinese"        => "zh-cn"
+                       "VoiceRSS"   =>  { "Deutsch"       => "de-de",
+                                          "English-US"    => "en-us",
+                                          "Schwedisch"    => "sv-se",
+                                          "France"        => "fr-fr",
+                                          "Spain"         => "es-es",
+                                          "Italian"       => "it-it",
+                                          "Chinese"       => "zh-cn",
+                                          "Dutch"         => "nl-nl"
                                          },
-                        "SVOX-pico" =>  {"Deutsch"        => "de-DE",
-                                         "English-US"     => "en-US",
-                                         "France"         => "fr-FR",
-                                         "Spain"          => "es-ES",
-                                         "Italian"        => "it-IT"
+                        "SVOX-pico" =>  { "Deutsch"       => "de-DE",
+                                          "English-US"    => "en-US",
+                                          "France"        => "fr-FR",
+                                          "Spain"         => "es-ES",
+                                          "Italian"       => "it-IT"
                                          },
-                        "Amazon-Polly"=> {"Deutsch"       => "Marlene"
+                        "Amazon-Polly"=> {"Deutsch"       => "Marlene",
+                                          "English-US"    => "Joanna",
+                                          "Schwedisch"    => "Astrid",
+                                          "France"        => "Celine",
+                                          "Spain"         => "Conchita",
+                                          "Italian"       => "Carla",
+                                          "Chinese"       => "Zhiyu",
+                                          "Dutch"         => "Lotte"
                                          }
                       );
 
@@ -161,6 +166,7 @@ sub Text2Speech_Initialize($)
                        " TTS_VolumeAdjust".
                        " TTS_noStatisticsLog:1,0".
                        " TTS_Language:".join(",", sort keys %{$language{"Google"}}).
+                       " TTS_Language_Custom".
                        " TTS_SpeakAsFastAsPossible:1,0".
                        " ".$readingFnAttributes;
 }
@@ -303,6 +309,17 @@ sub Text2Speech_Attr(@) {
       return "file does not exist: <".$newDir ."/". $FileTplPc[1] .">"
         unless (-e $newDir ."/". $FileTplPc[1]);
     }
+
+  } elsif ($a[2] eq "TTS_Ressource" && $value eq "Amazon Polly") {
+    eval {
+      require Paws::Polly;
+      Paws::Polly->import;
+      1;
+    } or return "Paws Module not installed. Please install, goto https://metacpan.org/source/JLMARTIN/Paws-0.39";
+
+    if (! -e "$ENV{HOME}/.aws/credentials"){
+      return "No AWS credentials found, please check ~/.aws/credentials <br> please refer https://metacpan.org/pod/Paws#AUTHENTICATION";
+    }
   }
 
   if($a[0] eq "set" && $a[2] eq "disable") {
@@ -434,8 +451,8 @@ sub Text2Speech_Set($@)
 
   return "no set argument specified" if(int(@a) < 2);
 
-  return "No APIKey specified"                  if (length($ttsAPIKey{$TTS_Ressource})>0 && !defined($TTS_APIKey)); 
-  return "No Username for TTS Access specified" if (length($ttsUser{$TTS_Ressource})>0 && !defined($TTS_User));
+  return "No APIKey specified"                  if (!defined($TTS_APIKey) && length($ttsAPIKey{$TTS_Ressource})>0);
+  return "No Username for TTS Access specified" if (!defined($TTS_User) && length($ttsUser{$TTS_Ressource})>0);
 
   my $cmd = shift(@a); # Dummy
      $cmd = shift(@a); # DevName
@@ -704,7 +721,7 @@ sub Text2Speech_Download($$$) {
   my $TTS_Ressource = AttrVal($hash->{NAME}, "TTS_Ressource", "Google");
   my $TTS_User      = AttrVal($hash->{NAME}, "TTS_User", "");
   my $TTS_APIKey    = AttrVal($hash->{NAME}, "TTS_APIKey", "");
-  my $TTS_Language  = AttrVal($hash->{NAME}, "TTS_Language", "Deutsch");
+  my $TTS_Language  = AttrVal($hash->{NAME}, "TTS_Language_Custom", $language{$TTS_Ressource}{AttrVal($hash->{NAME}, "TTS_Language", "Deutsch")});
   my $TTS_Quality   = AttrVal($hash->{NAME}, "TTS_Quality", "");
   my $TTS_Speed     = AttrVal($hash->{NAME}, "TTS_Speed", "");
   my $cmd;
@@ -715,8 +732,7 @@ sub Text2Speech_Download($$$) {
     my $fh;
 
     my $url  = "http://" . $ttsHost{$TTS_Ressource} . $ttsPath{$TTS_Ressource};
-       $url .= $ttsLang{$TTS_Ressource};
-       $url .= $language{$TTS_Ressource}{$TTS_Language};
+       $url .= $ttsLang{$TTS_Ressource} . $TTS_Language;
        $url .= "&" . $ttsAddon{$TTS_Ressource}              if(length($ttsAddon{$TTS_Ressource})>0);
        $url .= "&" . $ttsUser{$TTS_Ressource} . $TTS_User     if(length($ttsUser{$TTS_Ressource})>0);
        $url .= "&" . $ttsAPIKey{$TTS_Ressource} . $TTS_APIKey if(length($ttsAPIKey{$TTS_Ressource})>0);
@@ -726,7 +742,7 @@ sub Text2Speech_Download($$$) {
     
     Log3 $hash->{NAME}, 4, $hash->{NAME}.": Verwende ".$TTS_Ressource." OnlineResource zum Download";
     Log3 $hash->{NAME}, 4, $hash->{NAME}.": Hole URL: ". $url;
-    #$HttpResponse = GetHttpFile($ttsHost, $ttsPath . $ttsLang . $language{$TTS_Ressource}{$TTS_Language} . "&" . $ttsQuery . uri_escape($text));
+    #$HttpResponse = GetHttpFile($ttsHost, $ttsPath . $ttsLang . $TTS_Language . "&" . $ttsQuery . uri_escape($text));
     my $param = {
                       url         => $url,
                       timeout     => 5,
@@ -766,7 +782,7 @@ sub Text2Speech_Download($$$) {
   } elsif ($TTS_Ressource eq "SVOX-pico") {
     my $FileWav = $file . ".wav";
     
-    $cmd = "pico2wave --lang=" . $language{$TTS_Ressource}{$TTS_Language} . " --wave=\"" . $FileWav . "\" \"" . $text . "\""; 
+    $cmd = "pico2wave --lang=" . $TTS_Language . " --wave=\"" . $FileWav . "\" \"" . $text . "\"";
       Log3 $hash, 4, $hash->{NAME}.":" .$cmd;
       system($cmd);
     
@@ -775,10 +791,28 @@ sub Text2Speech_Download($$$) {
       system($cmd);
     unlink $FileWav;
   } elsif ($TTS_Ressource eq "Amazon-Polly") {
+    # with awscli
     # aws polly synthesize-speech --output-format mp3 --voice-id Marlene --text '%text%' abc.mp3
-    $cmd = "aws polly synthesize-speech --output-format mp3 --voice-id " . $language{$TTS_Ressource}{$TTS_Language} . " --text '" . $text . "' " . $file;
-    Log3 $hash, 4, $hash->{NAME}.":" .$cmd;
-    system($cmd);
+    #$cmd = "aws polly synthesize-speech --output-format json --speech-mark-types='[\"viseme\"]' --voice-id " . $TTS_Language . " --text '" . $text . "' " . $file;
+    #Log3 $hash, 4, $hash->{NAME}.":" .$cmd;
+    #system($cmd);
+    my $fh;
+    my $polly = Paws->service('Polly', region => 'eu-central-1');
+    my $res = $polly->SynthesizeSpeech(
+        VoiceId => $TTS_Language,
+        Text => $text,
+        OutputFormat => 'mp3',
+    );
+
+    $fh = new IO::File ">$file";
+    if(!defined($fh)) {
+      Log3 $hash->{NAME}, 2, $hash->{NAME}.": mp3 Datei <$file> konnte nicht angelegt werden.";
+      return undef;
+    }
+
+    $fh->print($res->AudioStream);
+    Log3 $hash->{NAME}, 4, $hash->{NAME}.": Schreibe mp3 in die Datei $file mit ". $res->RequestCharacters ." Chars";
+    close($fh);
   }
 }
 
