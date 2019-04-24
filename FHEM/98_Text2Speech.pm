@@ -1172,7 +1172,27 @@ sub Text2Speech_WriteStats($$$$){
         <code>wget http://www.dr-bischoff.de/raspi/pico2wave.deb</code><br>
         <code>sudo dpkg --install pico2wave.deb</code>
       </li>
+      <li>Amazon-Polly<br>
+       Using the Amazon Polly engine, the same as Amazon Alexa.<br>
+       The perl package Paws is required. An AWS Access and Polly Aws User is required too<br>
+       <code>cpan paws</code><br>
+       The credentials to your AWS Polly are expected at ~/.aws/credentials<br>
+       <code>[default]
+         aws_secret_access_key = xxxxxxxxxxxxxxxxxxxxxx
+         aws_access_key_id = xxxxxxxxxxxxxxx
+       </code>
+      </li>
     </ul>
+  </li>
+
+  li>TTS_Language<br>
+    Selection of different languages
+  </li>
+
+  <li>TTS_Language_Custom<br>
+    if you want another engine and speech of default languages, you can insert this here.<br>
+    The definition is dependent of used engine. This attribute overrides an TTS_Language attribute.<br>
+    Please refer the specific API reference.
   </li>
 
   <li>TTS_APIKey<br>
@@ -1329,6 +1349,10 @@ sub Text2Speech_WriteStats($$$$){
         hier das Attribut <i>TTS_speakAsFastAsPossible</i> zu verwenden. Die Verwendung des Attributes <i>TTS_useMP3Wrap</i> wird dringend empfohlen. 
         Ansonsten wird hier nur der letzte Teiltext als mp3 Datei im Reading dargestellt.
       </ul>
+      <p>
+          <b>Beispiel:</b><br>
+          <code>define MyTTS Text2Speech none</code>
+        </p>
     </li>
 
   </ul>
@@ -1376,7 +1400,7 @@ sub Text2Speech_WriteStats($$$$){
         Nutzung der VoiceRSS Sprachengine. Die Nutzung ist frei bis zu 350 Anfragen pro Tag. 
         Wenn mehr benötigt werden ist ein Bezahlmodell wählbar. Ein Internetzugriff ist notwendig! 
         Aufgrund der Qualit&auml;t ist der Einsatz diese Engine ebenfalls zu empfehlen.
-        Wenn diese Engine benutzt wird, ist ein APIKey notwendig (siehe TTXS_APIKey)
+        Wenn diese Engine benutzt wird, ist ein APIKey notwendig (siehe TTS_APIKey)
       </li>
       <li>ESpeak<br>
         Nutzung der ESpeak Offline Sprachengine. Die Qualit&auml; ist schlechter als die Google Engine.
@@ -1394,9 +1418,29 @@ sub Text2Speech_WriteStats($$$$){
         <code>wget http://www.dr-bischoff.de/raspi/pico2wave.deb</code><br>
         <code>sudo dpkg --install pico2wave.deb</code>
       </li>
+      <li>Amazon-Polly<br>
+       Nutzung der Amazon Polly Sprachengine, dieselbe Engine wie für Amazon Alexa verwendet wird.<br>
+       Es muss das Perl Package Paws installiert sowie ein AWS Konto und ein Polly AWS User verfügbar sein<br>
+       <code>cpan paws</code><br>
+       Die Zugangsdaten zum eigenen AWS Konto müssen unter ~/.aws/credentials liegen. <br>
+       <code>[default]
+         aws_secret_access_key = xxxxxxxxxxxxxxxxxxxxxx
+         aws_access_key_id = xxxxxxxxxxxxxxx
+       </code>
+      </li>
     </ul>
   </li>
-  
+
+  <li>TTS_Language<br>
+    Auswahl verschiendener Standardsprachen
+  </li>
+
+  <li>TTS_Language_Custom<br>
+    Möchte man eine Spreche und Stimme abweichend der Standardspreachen verwenden, so kann man diese hier eintragen. <br>
+    Die Definition ist abhängig der verwendeten Sprachengine. Diesea Attribut überschreibt ein ev. vorhandenes TTS_Langugae Attribut.<br>
+    Siehe in die jeweilige API Referenz
+  </li>
+
   <li>TTS_APIKey<br>
     Wenn VoiceRSS genutzt wird, ist ein APIKey notwendig. Um diesen zu erhalten ist eine vorherige
     Registrierung notwendig. Anschließend erhält man den APIKey <br>
