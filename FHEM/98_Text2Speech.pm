@@ -28,6 +28,9 @@ use URI::Escape;
 use Data::Dumper;
 use lib ('./FHEM/lib', './lib');
 
+# load in set function of TTS_RESSOURCE
+# require Paws::Polly
+
 sub Text2Speech_OpenDev($);
 sub Text2Speech_CloseDev($);
 
@@ -629,8 +632,7 @@ sub Text2Speech_SplitString($$$$$){
 
 #####################################
 # param1: hash  : Hash
-# param2: string: Typ (mplayer oder mp3wrap oder ....)
-# param3: string: Datei
+# param2: string: Datei
 # 
 # Erstellt den Commandstring für den Systemaufruf
 #####################################
@@ -652,18 +654,21 @@ sub Text2Speech_BuildMplayerCmdString($$) {
     $mplayerAudioOpts = "";
   }
 
-  # anstatt  mplayer wird ein anderer Player verwendet
-  if ($TTS_MplayerCall !~ m/mplayer/) {
-    $AlsaDevice = "";
-    $mplayerAudioOpts = "";
-    $mplayerNoDebug = "";
-    $mplayerOpts = "";
-  }
-
   my $NoDebug = $mplayerNoDebug;
   $NoDebug = "" if($verbose >= 5);
 
-  $cmd = $TTS_MplayerCall . " " . $mplayerAudioOpts . $AlsaDevice . " " .$NoDebug. " " . $mplayerOpts . " " . $file; 
+  # anstatt  mplayer wird ein anderer Player verwendet
+  if ($TTS_MplayerCall !~ m/mplayer/) {
+    $TTS_MplayerCall =~ s/{device}/$AlsaDevice/g;
+    $TTS_MplayerCall =~ s/{volume}/$hash->{VOLUME}/g;
+    $TTS_MplayerCall =~ s/{volumeadjust}/$TTS_VolumeAdjust/g;
+    $TTS_MplayerCall =~ s/{file}/$file/g;
+
+    $cmd = $TTS_MplayerCall;
+  } else {
+    $cmd = $TTS_MplayerCall . " " . $mplayerAudioOpts . $AlsaDevice . " " .$NoDebug. " " . $mplayerOpts . " " . $file;
+  }
+
 
   my $mp3Duration =  Text2Speech_CalcMP3Duration($hash, $file);
   BlockingInformParent("Text2Speech_readingsSingleUpdateByName", [$hash->{NAME}, "duration", "$mp3Duration"], 0);
@@ -678,8 +683,8 @@ sub Text2Speech_BuildMplayerCmdString($$) {
 sub Text2Speech_readingsSingleUpdateByName($$$) {
   my ($devName, $readingName, $readingVal) = @_;
   my $hash = $defs{$devName};
-  #Log3 $hash, 4, "Text2Speech_readingsSingleUpdateByName: Dev:$devName Reading:$readingName Val:$readingVal";
-  readingsSingleUpdate($defs{$devName}, $readingName, $readingVal, 1);
+  Log3 $hash, 5, $hash->{NAME}.": readingsSingleUpdateByName: Dev:$devName Reading:$readingName Val:$readingVal";
+  readingsSingleUpdate($hash, $readingName, $readingVal, 1);
 }
 
 #####################################
@@ -906,12 +911,12 @@ sub Text2Speech_DoIt($) {
     }
     
     if ($hash->{MODE} ne "SERVER") {
-    # im Falls Server, nicht die Datei abspielen
+    # im Server Mode, nicht die Datei abspielen
       if(-e $Mp3WrapFile) {
         $cmd = Text2Speech_BuildMplayerCmdString($hash, $Mp3WrapFile);
         $cmd .= " >/dev/null" if($verbose < 5);
 
-        Log3 $hash->{NAME}, 4, $hash->{NAME}.":" .$cmd;
+        Log3 $hash->{NAME}, 4, $hash->{NAME}.": " .$cmd;
         system($cmd);
       } else {
         Log3 $hash->{NAME}, 2, $hash->{NAME}.": Mp3Wrap Datei konnte nicht angelegt werden.";
@@ -1467,8 +1472,17 @@ sub Text2Speech_WriteStats($$$$){
   </li>
 
   <li>TTS_MplayerCall<br>
-    Optional: Angabe der Systemaufrufes zu Mplayer. Das folgende Beispiel ist der Standardaufruf.<br>
-    Beispiel: <code>sudo /usr/bin/mplayer</code>
+    Optional: Angabe des Systemaufrufes zu Mplayer oder einem anderem Tool. Wird ein anderes Tool als mplayer<br>
+    dort verwendet gelten folgende Templates: <br>
+    <ul>
+        <li>{device}</li>
+        <li>{volume}</li>
+        <li>{volumeadjust}</li>
+        <li>{file}</li>
+    </ul>
+    Beispiele:<br>
+    <code>attr myTTS TTS_MplayerCall sudo /usr/bin/mplayer</code>
+    <code>attr myTTS TTS_MplayerCall AUDIODEV={device} play -q -v {volume} {file}</code>
   </li>
 
   <li>TTS_SentenceAppendix<br>
