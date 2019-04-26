@@ -172,6 +172,7 @@ sub Text2Speech_Initialize($)
                        " TTS_Language:".join(",", sort keys %{$language{"Google"}}).
                        " TTS_Language_Custom".
                        " TTS_SpeakAsFastAsPossible:1,0".
+                       " TTS_OutputFile".
                        " ".$readingFnAttributes;
 }
 
@@ -824,6 +825,7 @@ sub Text2Speech_DoIt($) {
   my $TTS_Language = AttrVal($hash->{NAME}, "TTS_Language", "Deutsch");
   my $TTS_SentenceAppendix = AttrVal($hash->{NAME}, "TTS_SentenceAppendix", undef); #muss eine mp3-Datei sein, ohne Pfadangabe
   my $TTS_FileTemplateDir = AttrVal($hash->{NAME}, "TTS_FileTemplateDir", "templates");
+  my $TTS_OutputFile = AttrVal($hash->{NAME}, "TTS_OutputFile", undef);
 
   my $myFileTemplateDir;
   if($TTS_FileTemplateDir =~ m/^\/.*/) { $myFileTemplateDir = $TTS_FileTemplateDir; } else { $myFileTemplateDir = $TTS_CacheFileDir ."/". $TTS_FileTemplateDir;}
@@ -849,6 +851,7 @@ sub Text2Speech_DoIt($) {
   undef($TTS_SentenceAppendix) if($TTS_SentenceAppendix && (! -e $TTS_SentenceAppendix));
 
   #Abspielliste erstellen
+  my $AnzahlDownloads = 0;
   foreach my $t (@{$hash->{helper}{Text2Speech}}) {
     if(-e $t) {
       # falls eine bestimmte mp3-Datei mit absolutem Pfad gespielt werden soll
@@ -871,8 +874,10 @@ sub Text2Speech_DoIt($) {
       push(@Mp3WrapText, $t);
     } else {
       # es befindet sich noch Text zum Download in der Queue
-      if (AttrVal($hash->{NAME}, "TTS_SpeakAsFastAsPossible", 0) == 0) {
+      if (AttrVal($hash->{NAME}, "TTS_SpeakAsFastAsPossible", 0) == 0 || (AttrVal($hash->{NAME}, "TTS_SpeakAsFastAsPossible", 0) == 1 && $AnzahlDownloads == 0)) {
+        # nur Download wenn kein TTS_SpeakAsFastAsPossible gesetzt ist oder der erste Download erfolgen soll
         Text2Speech_Download($hash, $file, $t);
+        $AnzahlDownloads ++;
         if(-e $file) {
           push(@Mp3WrapFiles, $file);
           push(@Mp3WrapText, $t);
@@ -888,20 +893,45 @@ sub Text2Speech_DoIt($) {
 
   push(@Mp3WrapFiles, $TTS_SentenceAppendix) if($TTS_SentenceAppendix);
     
-  if(scalar(@Mp3WrapFiles) >= 2 && AttrVal($hash->{NAME}, "TTS_UseMP3Wrap", 0) == 1) {
+  if (AttrVal($hash->{NAME}, "TTS_UseMP3Wrap", 0) == 1) {
     # benutze das Tool MP3Wrap um bereits einzelne vorhandene Sprachdateien
     # zusammenzuführen. Ziel: sauberer Sprachfluss
     Log3 $hash->{NAME}, 4, $hash->{NAME}.": Bearbeite per MP3Wrap jetzt den Text: ". join(" ", @Mp3WrapText);
 
-    my $Mp3WrapPrefix = md5_hex(join("|", @Mp3WrapFiles));
-    my $Mp3WrapFile = $TTS_CacheFileDir ."/". $Mp3WrapPrefix . "_MP3WRAP.mp3"; 
+    my $Mp3WrapFile;
+    my $Mp3WrapPrefix;
+    $Mp3WrapPrefix = md5_hex(join("|", @Mp3WrapFiles));
 
-    if(! -e $Mp3WrapFile) {
-      $cmd = "mp3wrap " .$TTS_CacheFileDir. "/" .$Mp3WrapPrefix. ".mp3 " .join(" ", @Mp3WrapFiles);
+    if ($TTS_OutputFile) {
+        if ($TTS_OutputFile !~ m/^\//) {
+            $TTS_OutputFile = $TTS_CacheFileDir ."/".$TTS_OutputFile;
+        }
+        Log3 $hash->{NAME}, 4, $hash->{NAME}.": Verwende fixen Dateinamen: $TTS_OutputFile";
+        $Mp3WrapFile = $TTS_OutputFile;
+        unlink($Mp3WrapFile);
+    } else {
+        $Mp3WrapFile = $TTS_CacheFileDir ."/". $Mp3WrapPrefix . ".mp3";
+    }
+
+    if (scalar(@Mp3WrapFiles) == 1) {
+      # wenn nur eine Datei, dann wird diese genutzt
+      $Mp3WrapFile = $Mp3WrapFiles[0];
+    } elsif(! -e $Mp3WrapFile) {
+      $cmd = "mp3wrap " .$Mp3WrapFile. " " .join(" ", @Mp3WrapFiles);
       $cmd .= " >/dev/null" if($verbose < 5);
 
       Log3 $hash->{NAME}, 4, $hash->{NAME}.": " .$cmd;
       system($cmd);
+
+      my $t = substr($Mp3WrapFile, 0, length($Mp3WrapFile)-4)."_MP3WRAP.mp3";
+      Log3 $hash->{NAME}, 4, $hash->{NAME}.": Benenne Datei um von <".$t."> nach <".$Mp3WrapFile.">";
+      rename($t, $Mp3WrapFile);
+    }
+
+    if ($TTS_OutputFile && $TTS_OutputFile ne $Mp3WrapFile) {
+      Log3 $hash->{NAME}, 4, $hash->{NAME}.": Benenne Datei um von <".$Mp3WrapFile."> nach <".$TTS_OutputFile.">";
+      rename($Mp3WrapFile, $TTS_OutputFile);
+      $Mp3WrapFile = $TTS_OutputFile;
     }
     
     if ($hash->{MODE} ne "SERVER") {
@@ -913,7 +943,7 @@ sub Text2Speech_DoIt($) {
         Log3 $hash->{NAME}, 4, $hash->{NAME}.": " .$cmd;
         system($cmd);
       } else {
-        Log3 $hash->{NAME}, 2, $hash->{NAME}.": Mp3Wrap Datei konnte nicht angelegt werden.";
+        Log3 $hash->{NAME}, 2, $hash->{NAME}.": Mp3Wrap Datei konnte nicht gefunden werden.";
       }
     }
 
@@ -1519,6 +1549,15 @@ sub Text2Speech_WriteStats($$$$){
     so hat dieses Attribut keine Auswirkung.<br>
     Attribut nur verfügbar bei einer lokalen oder Server Instanz
   </li>
+
+  <li>TTS_OutputFile<br>
+      Angabe eines fixen Dateinamens als mp3 Output. Das Attribut ist nur relevant in Verbindung mit TTS_UseMP3Wrap.<br>
+      Wenn ein Dateinamen angegeben wird, so wird zusätzlich TTS_CacheFileDir beachtet. Bei einer absoluten Pfadangabe <br>
+      muss der Dateipfad durch FHEM schreibbar sein.<br>
+      <code>attr myTTS TTS_OutputFile output.mp3</code><br>
+      <code>attr myTTS TTS_OutputFile /media/miniDLNA/output.mp3</code><br>
+  </li>
+
 
   <li><a href="#readingFnAttributes">readingFnAttributes</a>
   </li><br>
