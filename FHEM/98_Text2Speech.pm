@@ -25,6 +25,7 @@ use IO::File;
 use HttpUtils;
 use Digest::MD5 qw(md5_hex);
 use URI::Escape;
+use Text::Iconv;
 use Data::Dumper;
 use lib ('./FHEM/lib', './lib');
 
@@ -533,16 +534,9 @@ sub Text2Speech_PrepareSpeech($$) {
     $TTS_AddDelemiter = "";
   }
 
-  # ersetze Sonderzeichen die Google nicht auflösen kann
-  if($TTS_Ressource eq "Google") {
-    $t =~ s/ä/ae/g;
-    $t =~ s/ö/oe/g;
-    $t =~ s/ü/ue/g;
-    $t =~ s/Ä/Ae/g;
-    $t =~ s/Ö/Oe/g;
-    $t =~ s/Ü/Ue/g;
-    $t =~ s/ß/ss/g;
-  }
+  #-- we may have problems with umlaut characters
+  my $converter = Text::Iconv->new("utf-8", "iso-8859-1");
+  $t = $converter->convert($t);
 
   my @text;
   push(@text, $t);
