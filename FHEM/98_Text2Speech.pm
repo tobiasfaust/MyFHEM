@@ -536,6 +536,16 @@ sub Text2Speech_PrepareSpeech($$) {
   }
 
   #-- we may have problems with umlaut characters
+  # ersetze Sonderzeichen die Google nicht auflösen kann
+  if($TTS_Ressource eq "Google") {
+      $t =~ s/ä/ae/g;
+      $t =~ s/ö/oe/g;
+      $t =~ s/ü/ue/g;
+      $t =~ s/Ä/Ae/g;
+      $t =~ s/Ö/Oe/g;
+      $t =~ s/Ü/Ue/g;
+      $t =~ s/ß/ss/g;
+  }
   my $converter = Text::Iconv->new("utf-8", "iso-8859-1");
   $t = $converter->convert($t);
 
