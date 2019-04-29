@@ -22,14 +22,16 @@ use strict;
 use warnings;
 use Blocking;
 use IO::File;
+use File::HomeDir;
 use HttpUtils;
 use Digest::MD5 qw(md5_hex);
 use URI::Escape;
 use Text::Iconv;
+use Encode::Detect::Detector;
 use Data::Dumper;
 use lib ('./FHEM/lib', './lib');
 
-# load in set function of TTS_RESSOURCE
+# loading in attr function of TTS_RESSOURCE if Paws is really needed
 # require Paws::Polly
 
 sub Text2Speech_OpenDev($);
@@ -60,7 +62,7 @@ my %ttsQuery        = ("Google"     => "q=",
 my %ttsPath         = ("Google"     => "/translate_tts?",
                        "VoiceRSS"   => "/?"
                        );
-my %ttsAddon        = ("Google"     => "client=tw-ob", 
+my %ttsAddon        = ("Google"     => "client=tw-ob&ie=UTF-8",
                        "VoiceRSS"   => ""
                        );
 my %ttsAPIKey       = ("Google"     => "", # kein APIKey nötig
@@ -78,7 +80,7 @@ my %ttsQuality       = ("Google"     => "",
 my %ttsMaxChar      = ("Google"     => 100,
                        "VoiceRSS"   => 300,
                        "SVOX-pico"  => 1000,
-                       "Amazon-Polly" => 100000
+                       "Amazon-Polly" => 3000
                        );
 my %language        = ("Google"     =>  { "Deutsch"       => "de",
                                           "English-US"    => "en-us",
@@ -126,7 +128,7 @@ sub Text2Speech_Initialize($)
   $hash->{UndefFn}   = "Text2Speech_Undefine";
   $hash->{AttrFn}    = "Text2Speech_Attr";
   $hash->{AttrList}  = "disable:0,1".
-                       " TTS_Delemiter".
+                       " TTS_Delimiter".
                        " TTS_Ressource:ESpeak,SVOX-pico,Amazon-Polly,". join(",", sort keys %ttsHost).
                        " TTS_APIKey".
                        " TTS_User".
@@ -245,15 +247,6 @@ sub Text2Speech_Undefine($$)
  return undef;
 }
 
-###################################
-# Angabe des Delemiters: zb.: +af~ 
-#   + -> erzwinge das Trennen, auch wenn Textbaustein < 100Zeichen
-#   - -> Trenne nur wenn Textbaustein > 100Zeichen
-#  af -> add first -> füge den Delemiter am Satzanfang wieder hinzu
-#  al -> add last  -> füge den Delemiter am Satzende wieder hinzu
-#  an -> add nothing -> Delemiter nicht wieder hinzufügen
-#   ~ -> der Delemiter
-###################################
 sub Text2Speech_Attr(@) {
   my @a = @_;
   my $do = 0;
@@ -264,11 +257,23 @@ sub Text2Speech_Attr(@) {
   my $TTS_CacheFileDir = AttrVal($hash->{NAME}, "TTS_CacheFileDir", "cache");
   my $TTS_FileMapping  = AttrVal($hash->{NAME}, "TTS_FileMapping", ""); # zb, silence:silence.mp3 ring:myringtone.mp3;
 
-  if($a[2] eq "TTS_Delemiter" && $a[0] ne "del") {
-    return "wrong delemiter syntax: [+-]a[lfn]. \n".
+  if($a[2] eq "TTS_Delimiter" && $a[0] ne "del") {
+    return "wrong Delimiter syntax: [+-]a[lfn]. Please see CommandRef for Notation. \n".
            "  Example 1: +an~\n".
            "  Example 2: +al." if($value !~ m/^([+-]a[lfn]){0,1}(.){1}$/i);
     return "This Attribute is only available in direct or server mode" if($hash->{MODE} !~ m/(DIRECT|SERVER)/ );
+
+  } elsif ($a[2] eq "TTS_Ressource" && $value eq "Amazon-Polly") {
+    Log3 $hash->{NAME}, 4, "Wechsele auf Amazon Polly, Lade Paws Library nach.";
+    eval {
+      require Paws::Polly;
+      Paws::Polly->import;
+      1;
+    } or return "Paws Module not installed. Please install, goto https://metacpan.org/source/JLMARTIN/Paws-0.39";
+
+    if (! -e File::HomeDir->my_home."/.aws/credentials"){
+      return "No AWS credentials in FHEM Homedir found, please check ".File::HomeDir->my_home."/.aws/credentials <br> please refer https://metacpan.org/pod/Paws#AUTHENTICATION";
+    }
 
   } elsif ($a[2] eq "TTS_Ressource") {
     return "This Attribute is only available in direct or server mode" if($hash->{MODE} !~ m/(DIRECT|SERVER)/ );
@@ -300,7 +305,7 @@ sub Text2Speech_Attr(@) {
       return "Could not create directory: <$value>";
     }
 
-  } elsif ($a[2] eq "TTS_TimeOut") {
+  } elsif ($a[0] eq "set" && $a[2] eq "TTS_TimeOut") {
     return "Only Numbers allowed" if ($value !~ m/[0-9]+/);
 
   } elsif ($a[2] eq "TTS_FileMapping") {
@@ -313,17 +318,6 @@ sub Text2Speech_Attr(@) {
       if($TTS_FileTemplateDir =~ m/^\/.*/) { $newDir = $TTS_FileTemplateDir; } else { $newDir = $TTS_CacheFileDir ."/". $TTS_FileTemplateDir;}
       return "file does not exist: <".$newDir ."/". $FileTplPc[1] .">"
         unless (-e $newDir ."/". $FileTplPc[1]);
-    }
-
-  } elsif ($a[2] eq "TTS_Ressource" && $value eq "Amazon Polly") {
-    eval {
-      require Paws::Polly;
-      Paws::Polly->import;
-      1;
-    } or return "Paws Module not installed. Please install, goto https://metacpan.org/source/JLMARTIN/Paws-0.39";
-
-    if (! -e "$ENV{HOME}/.aws/credentials"){
-      return "No AWS credentials found, please check ~/.aws/credentials <br> please refer https://metacpan.org/pod/Paws#AUTHENTICATION";
     }
   }
 
@@ -456,8 +450,8 @@ sub Text2Speech_Set($@)
 
   return "no set argument specified" if(int(@a) < 2);
 
-  return "No APIKey specified"                  if (!defined($TTS_APIKey) && length($ttsAPIKey{$TTS_Ressource})>0);
-  return "No Username for TTS Access specified" if (!defined($TTS_User) && length($ttsUser{$TTS_Ressource})>0);
+  return "No APIKey specified"                  if (!defined($TTS_APIKey) && ($ttsAPIKey{$TTS_Ressource} || length($ttsAPIKey{$TTS_Ressource})>0));
+  return "No Username for TTS Access specified" if (!defined($TTS_User) && ($ttsUser{$TTS_Ressource} || length($ttsUser{$TTS_Ressource})>0));
 
   my $cmd = shift(@a); # Dummy
      $cmd = shift(@a); # DevName
@@ -477,6 +471,7 @@ sub Text2Speech_Set($@)
   if($cmd eq "tts") {
     
     if($hash->{MODE} eq "DIRECT" || $hash->{MODE} eq "SERVER") {
+      $hash->{VOLUME} = ReadingsNum($me, "volume", 100);
       readingsSingleUpdate($hash, "playing", "1", 1);
       Text2Speech_PrepareSpeech($hash, join(" ", @a));
       $hash->{helper}{RUNNING_PID} = BlockingCall("Text2Speech_DoIt", $hash, "Text2Speech_Done", $TTS_TimeOut, "Text2Speech_AbortFn", $hash) unless(exists($hash->{helper}{RUNNING_PID}));
@@ -493,6 +488,7 @@ sub Text2Speech_Set($@)
     } elsif ($hash->{MODE} eq "REMOTE") {
       Text2Speech_Write($hash, "volume $vol");
     } else {return undef;}
+
     readingsSingleUpdate($hash, "volume", (($vol>100)?0:$vol), 1);  
   }
 
@@ -509,45 +505,63 @@ sub Text2Speech_Set($@)
 # param2: string to speech
 #
 #####################################
+###################################
+# Angabe des Delimiters: zb.: +af~
+#   + -> erzwinge das Trennen, auch wenn Textbaustein < 100Zeichen
+#   - -> Trenne nur wenn Textbaustein > 100Zeichen
+#  af -> add first -> füge den Delimiter am Satzanfang wieder hinzu
+#  al -> add last  -> füge den Delimiter am Satzende wieder hinzu
+#  an -> add nothing -> Delimiter nicht wieder hinzufügen
+#   ~ -> der Delimiter
+###################################
 sub Text2Speech_PrepareSpeech($$) {
   my ($hash, $t) = @_;
   my $me = $hash->{NAME};
 
   my $TTS_Ressource = AttrVal($hash->{NAME}, "TTS_Ressource", "Google");
-  my $TTS_Delemiter = AttrVal($hash->{NAME}, "TTS_Delemiter", undef); 
+  my $TTS_Delimiter = AttrVal($hash->{NAME}, "TTS_Delimiter", undef); 
   my $TTS_FileTpl   = AttrVal($hash->{NAME}, "TTS_FileMapping", ""); # zb, silence:silence.mp3 ring:myringtone.mp3; im Text: mein Klingelton :ring: ist laut.
   my $TTS_FileTemplateDir = AttrVal($hash->{NAME}, "TTS_FileTemplateDir", "templates");
 
   my $TTS_ForceSplit = 0;
-  my $TTS_AddDelemiter;
+  my $TTS_AddDelimiter;
 
-  if($TTS_Delemiter && $TTS_Delemiter =~ m/^[+-]a[lfn]/i) {
-    $TTS_ForceSplit = 1 if(substr($TTS_Delemiter,0,1) eq "+");
-    $TTS_ForceSplit = 0 if(substr($TTS_Delemiter,0,1) eq "-");
+  if($TTS_Delimiter && $TTS_Delimiter =~ m/^[+-]a[lfn]/i) {
+    $TTS_ForceSplit = 1 if(substr($TTS_Delimiter,0,1) eq "+");
+    $TTS_ForceSplit = 0 if(substr($TTS_Delimiter,0,1) eq "-");
     
-    $TTS_AddDelemiter = substr($TTS_Delemiter,1,2); # af, al oder an
+    $TTS_AddDelimiter = substr($TTS_Delimiter,1,2); # af, al oder an
     
-    $TTS_Delemiter = substr($TTS_Delemiter,3);
+    $TTS_Delimiter = substr($TTS_Delimiter,3);
     
-  } elsif (!$TTS_Delemiter) { # Default wenn Attr nicht gesetzt
-    $TTS_Delemiter = "(?<=[\\.!?])\\s*";
-    $TTS_ForceSplit = 1;
-    $TTS_AddDelemiter = "";
+  } elsif (!$TTS_Delimiter) { # Default wenn Attr nicht gesetzt
+    $TTS_Delimiter = "(?<=[\\.!?])\\s*";
+    $TTS_ForceSplit = 0;
+    $TTS_AddDelimiter = "";
   }
 
   #-- we may have problems with umlaut characters
   # ersetze Sonderzeichen die Google nicht auflösen kann
+  my $converter;
   if($TTS_Ressource eq "Google") {
-      $t =~ s/ä/ae/g;
-      $t =~ s/ö/oe/g;
-      $t =~ s/ü/ue/g;
-      $t =~ s/Ä/Ae/g;
-      $t =~ s/Ö/Oe/g;
-      $t =~ s/Ü/Ue/g;
-      $t =~ s/ß/ss/g;
+    # Google benötigt UTF-8
+   #   $t =~ s/ä/ae/g;
+   #   $t =~ s/ö/oe/g;
+   #   $t =~ s/ü/ue/g;
+   #   $t =~ s/Ä/Ae/g;
+   #   $t =~ s/Ö/Oe/g;
+   #   $t =~ s/Ü/Ue/g;
+   #   $t =~ s/ß/ss/g;
+
+    # -> use Encode::Detect::Detector;
+    #Log3 $hash, 4, "$me:  ermittelte CodePage: " .detect($t). " , konvertiere nach UTF-8";
+    #$converter = Text::Iconv->new(detect($t), "utf-8");
+    #$t = $converter->convert($t);
+  } elsif ($TTS_Ressource eq "Amazon-Polly") {
+    # Amazon benötigt ISO-8859-1 bei Nutzung Region eu-central-1
+    $converter = Text::Iconv->new("utf-8", "iso-8859-1");
+    $t = $converter->convert($t);
   }
-  my $converter = Text::Iconv->new("utf-8", "iso-8859-1");
-  $t = $converter->convert($t);
 
   my @text;
   push(@text, $t);
@@ -558,7 +572,7 @@ sub Text2Speech_PrepareSpeech($$) {
 
   # bei Angabe direkter MP3-Files wird hier ein temporäres Template vergeben
   for(my $i=0; $i<(@text); $i++) {
-    @FileTplPc = ($text[$i] =~ /\:([^:]+\.(?|mp3|ogg|wav))\:/g);
+    @FileTplPc = ($text[$i] =~ /:(\w+?\.(?:mp3|ogg|wav)):/g);
     for(my $j=0; $j<(@FileTplPc); $j++) {
       my $tpl = "FileTpl_#".$i."_".$j; #eindeutige Templatedefinition schaffen
       Log3 $hash, 4, "$me: Angabe einer direkten MP3-Datei gefunden:  $FileTplPc[$j] => $tpl";
@@ -569,7 +583,7 @@ sub Text2Speech_PrepareSpeech($$) {
 
   #iteriere durch die Sprachbausteine und splitte den Text bei den Filetemplates auf
   for(my $i=0; $i<(@text); $i++) {
-    my $cutter = '#!#'; #eindeutigen Cutter als Delemiter bei den Filetemplates vergeben
+    my $cutter = '#!#'; #eindeutigen Cutter als Delimiter bei den Filetemplates vergeben
     @FileTplPc = ($text[$i] =~ /:([^:]+):/g);
     for(my $j=0; $j<(@FileTplPc); $j++) {
       $text[$i] =~ s/:$FileTplPc[$j]:/$cutter$FileTplPc[$j]$cutter/g;
@@ -577,11 +591,16 @@ sub Text2Speech_PrepareSpeech($$) {
     @text = Text2Speech_SplitString(\@text, 0, $cutter, 1, ""); 
   }
 
-  @text = Text2Speech_SplitString(\@text, $ttsMaxChar{$TTS_Ressource}, $TTS_Delemiter, $TTS_ForceSplit, $TTS_AddDelemiter);
-  @text = Text2Speech_SplitString(\@text, $ttsMaxChar{$TTS_Ressource}, "(?<=[\\.!?])\\s*", 0, "");
+  Log3 $hash, 4, "$me: MaxChar = $ttsMaxChar{$TTS_Ressource}, Delimiter = $TTS_Delimiter, ForceSplit = $TTS_ForceSplit, AddDelimiter = $TTS_AddDelimiter";
+
+  @text = Text2Speech_SplitString(\@text, $ttsMaxChar{$TTS_Ressource}, $TTS_Delimiter, $TTS_ForceSplit, $TTS_AddDelimiter);
+  @text = Text2Speech_SplitString(\@text, $ttsMaxChar{$TTS_Ressource}, "(?<=[.!?])\\s*", 0, "");
   @text = Text2Speech_SplitString(\@text, $ttsMaxChar{$TTS_Ressource}, ",", 0, "al");
   @text = Text2Speech_SplitString(\@text, $ttsMaxChar{$TTS_Ressource}, ";", 0, "al");
   @text = Text2Speech_SplitString(\@text, $ttsMaxChar{$TTS_Ressource}, "und", 0, "af");
+  @text = Text2Speech_SplitString(\@text, $ttsMaxChar{$TTS_Ressource}, ":", 0, "al");
+  @text = Text2Speech_SplitString(\@text, $ttsMaxChar{$TTS_Ressource}, "\\bund\\b", 0, "af");
+  @text = Text2Speech_SplitString(\@text, $ttsMaxChar{$TTS_Ressource}, " ", 0, "");
 
   Log3 $hash, 4, "$me: Auflistung der Textbausteine nach Aufbereitung:"; 
   for(my $i=0; $i<(@text); $i++) {
@@ -601,22 +620,22 @@ sub Text2Speech_PrepareSpeech($$) {
 #####################################
 # param1: array : Text 2 Speech   
 # param2: string: MaxChar
-# param3: string: Delemiter
-# param4: int   : 1 -> es wird am Delemiter gesplittet
+# param3: string: Delimiter
+# param4: int   : 1 -> es wird am Delimiter gesplittet
 #                 0 -> es wird nur gesplittet, wenn Stringlänge länger als MaxChar
-# param5: string: Add Delemiter to String? [al|af|<empty>] (AddLast/AddFirst)
+# param5: string: Add Delimiter to String? [al|af|<empty>] (AddLast/AddFirst)
 #
 # Splittet die Texte aus $hash->{helper}->{Text2Speech} anhand des
-# Delemiters, wenn die Stringlänge MaxChars übersteigt.
-# Ist "AddDelemiter" angegeben, so wird der Delemiter an den 
+# Delimiters, wenn die Stringlänge MaxChars übersteigt.
+# Ist "AddDelimiter" angegeben, so wird der Delimiter an den 
 # String wieder angefügt
 #####################################
 sub Text2Speech_SplitString($$$$$){
   my @text          = @{shift()};
   my $MaxChar       = shift;
-  my $Delemiter     = shift;
+  my $Delimiter     = shift;
   my $ForceSplit    = shift;
-  my $AddDelemiter  = shift;
+  my $AddDelimiter  = shift;
   my @newText;
 
   for(my $i=0; $i<(@text); $i++) {
@@ -625,12 +644,36 @@ sub Text2Speech_SplitString($$$$$){
       next;
     }
 
-    my @b = split(/$Delemiter/, $text[$i]); 
-    for(my $j=0; $j<(@b); $j++) {
-      $b[$j] = $b[$j] . $Delemiter if($AddDelemiter eq "al"); # Am Satzende wieder hinzufügen.
-      $b[$j+1] = $Delemiter . $b[$j+1] if(($AddDelemiter eq "af") && ($b[$j+1])); # Am Satzanfang des nächsten Satzes wieder hinzufügen.
-      push(@newText, $b[$j]);
+    my @b;
+    if($Delimiter =~/^ $/) {
+      @b = split(' ', $text[$i]);
     }
+    else {
+      @b = split(/$Delimiter/, $text[$i]);
+    }
+    if((@b)>1) {
+      # setze zu kleine Textbausteine wieder zusammen bis MaxChar erreicht ist
+      if(length($Delimiter)==1) {
+        for(my $k=0; $k<(@b); ) {
+          if($k+1<(@b) && length($b[$k])+length($b[$k+1]) <= $MaxChar) {
+            $b[$k] = join($Delimiter, $b[$k], $b[$k+1]);
+            splice(@b, $k+1, 1);
+          }
+    	  else {
+    	  	$k++;
+    	  }
+         }
+      }
+      for(my $j=0; $j<(@b); $j++) {
+        (my $boundaryDelimiter = $Delimiter) =~ s/^\\b(.+)\\b$/$1/g;
+         $b[$j] = $b[$j] . $boundaryDelimiter if($AddDelimiter eq "al"); # Am Satzende wieder hinzufügen.
+         $b[$j+1] = $boundaryDelimiter . $b[$j+1] if(($AddDelimiter eq "af") && ($b[$j+1])); # Am Satzanfang des nächsten Satzes wieder hinzufügen.
+         push(@newText, $b[$j]);
+      }
+    }
+    elsif((@b)==1) {
+           push(@newText, $text[$i]);
+      }
   }
   return @newText;
 }
@@ -778,18 +821,20 @@ sub Text2Speech_Download($$$) {
     $fh->print($HttpResponse);
     Log3 $hash->{NAME}, 4, $hash->{NAME}.": Schreibe mp3 in die Datei $file mit ".length($HttpResponse)." Bytes";  
     close($fh);
-  } elsif ($TTS_Ressource eq "ESpeak") {
+  }
+  elsif ($TTS_Ressource eq "ESpeak") {
     my $FileWav = $file . ".wav";
-    
-    $cmd = "sudo espeak -vde+f3 -k5 -s150 \"" . $text . "\">\"" . $FileWav . "\""; 
-      Log3 $hash, 4, $hash->{NAME}.":" .$cmd;
-      system($cmd);
+
+    $cmd = "sudo espeak -vde+f3 -k5 -s150 \"" . $text . "\" -w \"" . $FileWav . "\"";
+    Log3 $hash, 4, $hash->{NAME}.":" .$cmd;
+    system($cmd);
     
     $cmd = "lame \"" . $FileWav . "\" \"" . $file . "\""; 
       Log3 $hash, 4, $hash->{NAME}.":" .$cmd;
       system($cmd);
     unlink $FileWav;
-  } elsif ($TTS_Ressource eq "SVOX-pico") {
+  }
+  elsif ($TTS_Ressource eq "SVOX-pico") {
     my $FileWav = $file . ".wav";
     
     $cmd = "pico2wave --lang=" . $TTS_Language . " --wave=\"" . $FileWav . "\" \"" . $text . "\"";
@@ -800,7 +845,8 @@ sub Text2Speech_Download($$$) {
       Log3 $hash, 4, $hash->{NAME}.":" .$cmd;
       system($cmd);
     unlink $FileWav;
-  } elsif ($TTS_Ressource eq "Amazon-Polly") {
+  }
+  elsif ($TTS_Ressource eq "Amazon-Polly") {
     # with awscli
     # aws polly synthesize-speech --output-format mp3 --voice-id Marlene --text '%text%' abc.mp3
     #$cmd = "aws polly synthesize-speech --output-format json --speech-mark-types='[\"viseme\"]' --voice-id " . $TTS_Language . " --text '" . $text . "' " . $file;
@@ -1085,7 +1131,7 @@ sub Text2Speech_WriteStats($$$$){
 =pod
 =item helper
 =item summary    speaks given text via loudspeaker
-=item summary_DE wandelt uebergebenen Text um fuer Ausgabe auf Lautsprecher
+=item summary_DE wandelt Text in Sprache um zur Ausgabe auf Lautsprecher
 =begin html
 
 <a name="Text2Speech"></a>
@@ -1175,9 +1221,9 @@ sub Text2Speech_WriteStats($$$$){
 <a name="Text2Speechattr"></a>
 <b>Attributes</b>
 <ul>
-  <li>TTS_Delemiter<br>
+  <li>TTS_Delimiter<br>
     optional: By using the google engine, its not possible to convert more than 100 characters in a single audio brick.
-    With a delemiter the audio brick will be split at this character. A delemiter must be a single character.!<br>
+    With a Delimiter the audio brick will be split at this character. A Delimiter must be a single character.!<br>
     By default, ech audio brick will be split at sentence end. Is a single sentence longer than 100 characters, 
     the sentence will be split additionally at comma, semicolon and the word <i>and</i>.<br>
     Notice: Only available in locally instances with Google engine!
@@ -1418,13 +1464,22 @@ sub Text2Speech_WriteStats($$$$){
 <a name="Text2Speechattr"></a>
 <b>Attribute</b>
 <ul>
-  <li>TTS_Delemiter<br>
-    Optional: Wird ein Delemiter angegeben, so wird der Sprachbaustein an dieser Stelle geteilt. 
-    Als Delemiter ist nur ein einzelnes Zeichen zul&auml;ssig.
-    Hintergrund ist die Tatsache, das die Google Sprachengine nur 100Zeichen zul&auml;sst.<br>
+  <li>TTS_Delimiter<br>
+    Optional: Wird ein Delimiter angegeben, so wird der Sprachbaustein an dieser Stelle geteilt. 
+    Als Delimiter ist nur ein einzelnes Zeichen zul&auml;ssig.
+    Hintergrund ist die Tatsache, das die einige Sprachengines nur eine bestimmt Anzahl an Zeichen (zb. Google nur 100Zeichen) zul&auml;sst.<br>
     Im Standard wird nach jedem Satzende geteilt. Ist ein einzelner Satz l&auml;nger als 100 Zeichen,
     so wird zus&auml;tzlich nach Kommata, Semikolon und dem Verbindungswort <i>und</i> geteilt.<br>
-    Achtung: Nur bei einem lokal definierter Text2Speech Instanz m&ouml;glich und nur bei Nutzung der Google Sprachengine relevant!
+    Achtung: Nur bei einem lokal definierter Text2Speech Instanz m&ouml;glich!<br>
+    <b>Notation</b><br>
+       + -> erzwinge das Trennen, auch wenn Textbaustein < x Zeichen<br>
+       - -> Trenne nur wenn Textbaustein > x Zeichen
+      af -> add first -> füge den Delimiter am Satzanfang wieder hinzu<br>
+      al -> add last  -> füge den Delimiter am Satzende wieder hinzu<br>
+      an -> add nothing -> Delimiter nicht wieder hinzufügen<br>
+       ~ -> der Delimiter<br>
+    <b>Beispiel</b><br>
+    <code>attr myTTS TTS_Delimiter -al.</code>
   </li> 
 
   <li>TTS_Ressource<br>
@@ -1492,13 +1547,13 @@ sub Text2Speech_WriteStats($$$$){
 
   <li>TTS_CacheFileDir<br>
     Optional: Die per Google geladenen Sprachbausteine werden in diesem Verzeichnis zur Wiedeverwendung abgelegt.
-    Es findet zurZEit keine automatisierte L&ouml;schung statt.<br>
+    Es findet zurZeit keine automatisierte L&ouml;schung statt.<br>
     Default: <i>cache/</i><br>
     Achtung: Nur bei einem lokal definierter Text2Speech Instanz m&ouml;glich!
   </li>
 
   <li>TTS_UseMP3Wrap<br>
-    Optional: F&uuml;r eine fl&uuml;ssige Sprachausgabe ist es zu empfehlen, die einzelnen vorher per Google 
+    Optional: F&uuml;r eine fl&uuml;ssige Sprachausgabe ist es zu empfehlen, die einzelnen vorher
     geladenen Sprachbausteine zu einem einzelnen Sprachbaustein zusammenfassen zu lassen bevor dieses per 
     Mplayer ausgegeben werden. Dazu muss Mp3Wrap installiert werden.<br>
     <code>apt-get install mp3wrap</code><br>
@@ -1588,6 +1643,12 @@ sub Text2Speech_WriteStats($$$$){
 <a name="Text2SpeechExamples"></a>
 <b>Beispiele</b> 
 <ul>
+  <code>define TTS_EG_WZ Text2Speech hw=/dev/snd/controlC3</code><br>
+  <code>attr TTS_EG_WZ TTS_Language Deutsch</code><br>
+  <code>attr TTS_EG_WZ TTS_MplayerCall /usr/bin/mplayer</code><br>
+  <code>attr TTS_EG_WZ TTS_Ressource Amazon-Polly</code><br>
+  <code>attr TTS_EG_WZ TTS_UseMP3Wrap 1</code><br>
+  <br>
   <code>define MyTTS Text2Speech hw=0.0</code><br>
   <code>set MyTTS tts Die Alarmanlage ist bereit.</code><br>
   <code>set MyTTS tts :beep.mp3:</code><br>
