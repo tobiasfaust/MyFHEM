@@ -22,12 +22,11 @@ use strict;
 use warnings;
 use Blocking;
 use IO::File;
-use File::HomeDir;
 use HttpUtils;
 use Digest::MD5 qw(md5_hex);
 use URI::Escape;
 use Text::Iconv;
-use Encode::Detect::Detector;
+#use Encode::Detect::Detector;
 use Data::Dumper;
 use lib ('./FHEM/lib', './lib');
 
@@ -264,12 +263,18 @@ sub Text2Speech_Attr(@) {
     return "This Attribute is only available in direct or server mode" if($hash->{MODE} !~ m/(DIRECT|SERVER)/ );
 
   } elsif ($a[2] eq "TTS_Ressource" && $value eq "Amazon-Polly") {
-    Log3 $hash->{NAME}, 4, "Wechsele auf Amazon Polly, Lade Paws Library nach.";
+    Log3 $hash->{NAME}, 4, "Wechsele auf Amazon Polly, Lade Librarys nach.";
     eval {
       require Paws::Polly;
       Paws::Polly->import;
       1;
     } or return "Paws Module not installed. Please install, goto https://metacpan.org/source/JLMARTIN/Paws-0.39";
+
+    eval {
+      require  File::HomeDir;
+      File::HomeDir->import;
+      1;
+    } or return "File::HomeDir Module not installed. Please install";
 
     if (! -e File::HomeDir->my_home."/.aws/credentials"){
       return "No AWS credentials in FHEM Homedir found, please check ".File::HomeDir->my_home."/.aws/credentials <br> please refer https://metacpan.org/pod/Paws#AUTHENTICATION";
