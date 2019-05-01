@@ -1275,7 +1275,7 @@ sub Text2Speech_WriteStats($$$$){
     </ul>
   </li>
 
-  li>TTS_Language<br>
+  <li>TTS_Language<br>
     Selection of different languages
   </li>
 
