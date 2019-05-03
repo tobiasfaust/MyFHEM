@@ -554,7 +554,7 @@ sub Text2Speech_PrepareSpeech($$) {
   # Encode::Guess->set_suspects(qw/euc-jp shiftjis 7bit-jis/); # for japanese codepages
   my $enc = guess_encoding($t);
   if ($enc->name ne "utf8") {
-    Log3 $hash, 4, "$me:  ermittelte CodePage: " .$enc->name. " , konvertiere nach UTF-8";
+    Log3 $hash, 4, "$me: ermittelte CodePage: " .$enc->name. " , konvertiere nach UTF-8";
     $converter = Text::Iconv->new($enc->name, "utf-8");
     $t = $converter->convert($t);
   }
@@ -1468,7 +1468,8 @@ sub Text2Speech_WriteStats($$$$){
   <li><b>tts</b>:<br>
     Setzen eines Textes zur Sprachausgabe. Um mp3-Dateien direkt auszugeben, müssen diese mit f&uuml;hrenden 
     und schließenden Doppelpunkten angegebenen sein. Die MP3-Dateien müssen unterhalb des Verzeichnisses <i>TTS_FileTemplateDir</i> gespeichert sein.<br>
-    Der Text selbst darf deshalb selbst keine Doppelpunte beinhalten. Siehe Beispiele.
+    Der Text selbst darf deshalb selbst keine Doppelpunte beinhalten. <br>
+    Für die SpracheEngine Amazon Polly kann auch SSML verwendet werden, Siehe Beispiele.
   </li>
   <li><b>volume</b>:<br>
     Setzen der Ausgabe Lautst&auml;rke.<br>
@@ -1666,7 +1667,8 @@ sub Text2Speech_WriteStats($$$$){
   <code>attr TTS_EG_WZ TTS_Language Deutsch</code><br>
   <code>attr TTS_EG_WZ TTS_MplayerCall /usr/bin/mplayer</code><br>
   <code>attr TTS_EG_WZ TTS_Ressource Amazon-Polly</code><br>
-  <code>attr TTS_EG_WZ TTS_UseMP3Wrap 1</code><br>
+  <code>attr TTS_EG_WZ TTS_UseMP3Wrap 1</code><br><br>
+  <code>set MyTTS tts &lt;speak&gt;Mary had a little lamb.&lt;/speak&gt;</code>
   <br>
   <code>define MyTTS Text2Speech hw=0.0</code><br>
   <code>set MyTTS tts Die Alarmanlage ist bereit.</code><br>
