@@ -26,7 +26,7 @@ use HttpUtils;
 use Digest::MD5 qw(md5_hex);
 use URI::Escape;
 use Text::Iconv;
-#use Encode::Detect::Detector;
+use Encode::Guess;
 use Data::Dumper;
 use lib ('./FHEM/lib', './lib');
 
@@ -548,21 +548,29 @@ sub Text2Speech_PrepareSpeech($$) {
   #-- we may have problems with umlaut characters
   # ersetze Sonderzeichen die Google nicht auflösen kann
   my $converter;
-  if($TTS_Ressource eq "Google") {
-    # Google benötigt UTF-8
-   #   $t =~ s/ä/ae/g;
-   #   $t =~ s/ö/oe/g;
-   #   $t =~ s/ü/ue/g;
-   #   $t =~ s/Ä/Ae/g;
-   #   $t =~ s/Ö/Oe/g;
-   #   $t =~ s/Ü/Ue/g;
-   #   $t =~ s/ß/ss/g;
 
-    # -> use Encode::Detect::Detector;
-    #Log3 $hash, 4, "$me:  ermittelte CodePage: " .detect($t). " , konvertiere nach UTF-8";
-    #$converter = Text::Iconv->new(detect($t), "utf-8");
-    #$t = $converter->convert($t);
-  } elsif ($TTS_Ressource eq "Amazon-Polly") {
+  # wandle per standard alles nach UTF8
+  # check only ascii, utf8 and UTF-(16|32) with BOM, if not enough use function set_suspects
+  # Encode::Guess->set_suspects(qw/euc-jp shiftjis 7bit-jis/); # for japanese codepages
+  my $enc = guess_encoding($t);
+  if ($enc->name ne "utf8") {
+    Log3 $hash, 4, "$me:  ermittelte CodePage: " .$enc->name. " , konvertiere nach UTF-8";
+    $converter = Text::Iconv->new($enc->name, "utf-8");
+    $t = $converter->convert($t);
+  }
+
+  #if($TTS_Ressource eq "Google") {
+    # Google benötigt UTF-8
+    #   $t =~ s/ä/ae/g;
+    #   $t =~ s/ö/oe/g;
+    #   $t =~ s/ü/ue/g;
+    #   $t =~ s/Ä/Ae/g;
+    #   $t =~ s/Ö/Oe/g;
+    #   $t =~ s/Ü/Ue/g;
+    #   $t =~ s/ß/ss/g;
+  #}
+
+  if ($TTS_Ressource eq "Amazon-Polly") {
     # Amazon benötigt ISO-8859-1 bei Nutzung Region eu-central-1
     $converter = Text::Iconv->new("utf-8", "iso-8859-1");
     $t = $converter->convert($t);
