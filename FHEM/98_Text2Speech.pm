@@ -1001,6 +1001,16 @@ sub Text2Speech_DoIt($) {
       my $t = substr($Mp3WrapFile, 0, length($Mp3WrapFile)-4)."_MP3WRAP.mp3";
       Log3 $hash->{NAME}, 4, $hash->{NAME}.": Benenne Datei um von <".$t."> nach <".$Mp3WrapFile.">";
       rename($t, $Mp3WrapFile);
+      
+       #falls die Datei existiert den ID3V1 und ID3V2 Tag entfernen
+      if(-e $Mp3WrapFile){
+        eval{
+            use MP3::Info;
+            remove_mp3tag($Mp3WrapFile, 2);
+            remove_mp3tag($Mp3WrapFile, 1);
+            Log3 $hash, 4, $hash->{NAME}.": Die ID3 Tags von $Mp3WrapFile wurden geloescht";
+        };
+      }
     }
 
     if ($TTS_OutputFile && $TTS_OutputFile ne $Mp3WrapFile) {
