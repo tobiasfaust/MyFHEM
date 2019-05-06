@@ -21,17 +21,10 @@ package main;
 use strict;
 use warnings;
 use Blocking;
-use IO::File;
 use HttpUtils;
-use Digest::MD5 qw(md5_hex);
-use URI::Escape;
-use Text::Iconv;
-use Encode::Guess;
-use Data::Dumper;
-use lib ('./FHEM/lib', './lib');
+# use Data::Dumper;
 
-# loading in attr function of TTS_RESSOURCE if Paws is really needed
-# require Paws::Polly
+use lib ('./FHEM/lib', './lib');
 
 sub Text2Speech_OpenDev($);
 sub Text2Speech_CloseDev($);
@@ -231,6 +224,69 @@ sub Text2Speech_Define($$)
 
   $hash->{STATE} = "Initialized";
 
+  my $ret = Text2Speech_loadmodules($hash, "");
+  if ($ret) {
+    Log3 $hash->{NAME}, 3, $ret;
+  }
+  return undef;
+}
+
+##########################
+# Überprüfung und Einladen der notwendigen Module
+##########################
+sub Text2Speech_loadmodules($$) {
+  my ($hash, $TTS_Ressource) = @_;
+  eval {
+    require IO::File;
+    IO::File->import;
+    1;
+  } or return "IO::File Module not installed, please install";
+
+  eval {
+    require Digest::MD5;
+    Digest::MD5->import;
+    1;
+  } or return "Digest::MD5 Module not installed, please install";
+
+  eval {
+    require URI::Escape;
+    URI::Escape->import;
+    1;
+  } or return "URI::Escape Module not installed, please install";
+
+  eval {
+    require Text::Iconv;
+    Text::Iconv->import;
+    1;
+  } or return "Text::Iconv Module not installed, please install";
+
+  eval {
+    require Encode::Guess;
+    Encode::Guess->import;
+    1;
+  } or return "Encode::Guess Module not installed, please install";
+
+  eval {
+    require MP3::Info;
+    MP3::Info->import;
+    1;
+  } or return "MP3::Info Module not installed, please install";
+
+  if ($TTS_Ressource eq "Amazon-Polly") {
+    # Module werden nur benötigt mit der Polly Engine
+    eval {
+      require Paws::Polly;
+      Paws::Polly->import;
+      1;
+    } or return "Paws Module not installed. Please install, goto https://metacpan.org/source/JLMARTIN/Paws-0.39";
+
+    eval {
+      require File::HomeDir;
+      File::HomeDir->import;
+      1;
+    } or return "File::HomeDir Module not installed. Please install";
+  }
+
   return undef;
 }
 
@@ -263,18 +319,9 @@ sub Text2Speech_Attr(@) {
     return "This Attribute is only available in direct or server mode" if($hash->{MODE} !~ m/(DIRECT|SERVER)/ );
 
   } elsif ($a[2] eq "TTS_Ressource" && $value eq "Amazon-Polly") {
-    Log3 $hash->{NAME}, 4, "Wechsele auf Amazon Polly, Lade Librarys nach.";
-    eval {
-      require Paws::Polly;
-      Paws::Polly->import;
-      1;
-    } or return "Paws Module not installed. Please install, goto https://metacpan.org/source/JLMARTIN/Paws-0.39";
-
-    eval {
-      require  File::HomeDir;
-      File::HomeDir->import;
-      1;
-    } or return "File::HomeDir Module not installed. Please install";
+    Log3 $hash->{NAME}, 4, $hash->{NAME}. ": Wechsele auf Amazon Polly, Lade Librarys nach.";
+    my $ret = Text2Speech_loadmodules($hash, $a[2]);
+    if ($ret) {return $ret;} # breche ab wenn Module fehlen
 
     if (! -e File::HomeDir->my_home."/.aws/credentials"){
       return "No AWS credentials in FHEM Homedir found, please check ".File::HomeDir->my_home."/.aws/credentials <br> please refer https://metacpan.org/pod/Paws#AUTHENTICATION";
@@ -457,6 +504,13 @@ sub Text2Speech_Set($@)
 
   return "No APIKey specified"                  if (!defined($TTS_APIKey) && ($ttsAPIKey{$TTS_Ressource} || length($ttsAPIKey{$TTS_Ressource})>0));
   return "No Username for TTS Access specified" if (!defined($TTS_User) && ($ttsUser{$TTS_Ressource} || length($ttsUser{$TTS_Ressource})>0));
+
+  my $ret = Text2Speech_loadmodules($hash, $TTS_Ressource);
+  if ($ret) {
+    # breche ab wenn Module fehlen
+    Log3 $me, 3, $ret;
+    return $ret;
+  }
 
   my $cmd = shift(@a); # Dummy
      $cmd = shift(@a); # DevName
@@ -758,7 +812,6 @@ sub Text2Speech_CalcMP3Duration($$) {
   my $time;
   my ($hash, $file) = @_;
   eval {
-    use MP3::Info;    
     my $tag = get_mp3info($file);
     if ($tag && defined($tag->{SECS})) {
 	  $time = int($tag->{SECS}+0.5);
@@ -792,6 +845,8 @@ sub Text2Speech_Download($$$) {
   my $TTS_Speed     = AttrVal($hash->{NAME}, "TTS_Speed", "");
   my $cmd;
 
+  Log3 $hash->{NAME}, 4, $hash->{NAME}.": Verwende ".$TTS_Ressource." Resource zur TTS-Generierung";
+
   if($TTS_Ressource =~ m/(Google|VoiceRSS)/) {
     my $HttpResponse;
     my $HttpResponseErr;
@@ -806,7 +861,6 @@ sub Text2Speech_Download($$$) {
        $url .= "&" . $ttsSpeed{$TTS_Ressource} . $TTS_Speed if(length($ttsSpeed{$TTS_Ressource})>0);
        $url .= "&" . $ttsQuery{$TTS_Ressource} . uri_escape($text);
     
-    Log3 $hash->{NAME}, 4, $hash->{NAME}.": Verwende ".$TTS_Ressource." OnlineResource zum Download";
     Log3 $hash->{NAME}, 4, $hash->{NAME}.": Hole URL: ". $url;
     #$HttpResponse = GetHttpFile($ttsHost, $ttsPath . $ttsLang . $TTS_Language . "&" . $ttsQuery . uri_escape($text));
     my $param = {
@@ -999,18 +1053,16 @@ sub Text2Speech_DoIt($) {
       system($cmd);
 
       my $t = substr($Mp3WrapFile, 0, length($Mp3WrapFile)-4)."_MP3WRAP.mp3";
-      Log3 $hash->{NAME}, 4, $hash->{NAME}.": Benenne Datei um von <".$t."> nach <".$Mp3WrapFile.">";
-      rename($t, $Mp3WrapFile);
-      
-       #falls die Datei existiert den ID3V1 und ID3V2 Tag entfernen
-      if(-e $Mp3WrapFile){
+      if(-e $t){
+        Log3 $hash->{NAME}, 4, $hash->{NAME}.": Benenne Datei um von <".$t."> nach <".$Mp3WrapFile.">";
+        rename($t, $Mp3WrapFile);
+        #falls die Datei existiert den ID3V1 und ID3V2 Tag entfernen
         eval{
-            use MP3::Info;
-            remove_mp3tag($Mp3WrapFile, 2);
-            remove_mp3tag($Mp3WrapFile, 1);
-            Log3 $hash, 4, $hash->{NAME}.": Die ID3 Tags von $Mp3WrapFile wurden geloescht";
-        };
-      }
+          remove_mp3tag($Mp3WrapFile, 2);
+          remove_mp3tag($Mp3WrapFile, 1);
+          Log3 $hash, 4, $hash->{NAME}.": Die ID3 Tags von $Mp3WrapFile wurden geloescht";
+        } or Log3 $hash->{NAME}, 3, "MP3::Info Modul fehlt, konnte MP3 Tags nicht entfernen";
+      } else {Log3 $hash->{NAME}, 3, $hash->{NAME}.": MP3WRAP Fehler!, Datei wurde nicht generiert.";}
     }
 
     if ($TTS_OutputFile && $TTS_OutputFile ne $Mp3WrapFile) {
