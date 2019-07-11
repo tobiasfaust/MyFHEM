@@ -993,7 +993,7 @@ sub Text2Speech_DoIt($) {
       $file = $TTS_CacheFileDir."/".$filename;
       Log3 $hash->{NAME}, 4, $hash->{NAME}.": $filename als direkte MP3 Datei erkannt!";
     } else {
-      $filename = md5_hex($language{$TTS_Ressource}{$TTS_Language} ."|". $t) . ".mp3";
+      $filename = md5_hex($TTS_Ressource ."|". $t) . ".mp3";
       $file = $TTS_CacheFileDir."/".$filename;
       Log3 $hash->{NAME}, 4, $hash->{NAME}.": Textbaustein ist keine direkte MP3 Datei, ermittle MD5 CacheNamen: $filename";
     } 
@@ -1653,7 +1653,7 @@ sub Text2Speech_WriteStats($$$$){
     </ul>
     Beispiele:<br>
     <code>attr myTTS TTS_MplayerCall sudo /usr/bin/mplayer</code>
-    <code>attr myTTS TTS_MplayerCall AUDIODEV={device} play -q -v {volume} {file}</code>
+    <code>attr myTTS TTS_MplayerCall AUDIODEV={device} play -q -v $(({volume}*{volumeadjust}/10000)).$(({volume}*{volumeadjust}%10000)) {file}</code>
   </li>
 
   <li>TTS_SentenceAppendix<br>
