@@ -22,7 +22,7 @@
 ##############################################
 #
 ##############################################
-## install package libmp3-tag-perl, libjson-xs-perl, libmp3-info-perl, libmath-round-perl
+## install package libmp3-tag-perl, libjson-xs-perl, libmp3-info-perl
 ##
 ## images/cd-empty.png
 ##############################################
@@ -43,7 +43,6 @@ use IO::File;
 use Fcntl;
 use File::Basename;
 use File::Copy;
-use Math::Round ();
 require 'Blocking.pm';
 require 'HttpUtils.pm';
 use vars qw($readingFnAttributes);
@@ -582,7 +581,7 @@ sub MediaList_GetMP3Tags($$) {
     utf8::encode($album);
     utf8::encode($comment);
 
-    $res = {"Artist" => $artist, "Title" => $title, "Album" => $album, "Time" => math::round($mp3info->{SECS}), "File" => $file, "Cover" => ""};
+    $res = {"Artist" => $artist, "Title" => $title, "Album" => $album, "Time" => round($mp3info->{SECS},0), "File" => $file, "Cover" => ""};
     Log3  $hash, 5, "GetMP3Tags: ".Dumper($res);
 
     return $res;
@@ -858,7 +857,6 @@ sub MediaList_Crawl($$) {
 
     <li>libjson-xs-perl</li> 
     <li>libmp3-info-perl</li>
-    <li>libmath-round-perl</li>
   </ul>
   <br>
   <br>
