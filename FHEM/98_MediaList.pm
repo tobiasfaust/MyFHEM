@@ -575,13 +575,14 @@ sub MediaList_GetMP3Tags($$) {
   if ($mp3 = MP3::Tag->new($file)) {
     my ($title, $track, $artist, $album, $comment, $year, $genre) = $mp3->autoinfo();
     my $mp3info = get_mp3info($file);
-    
+    my $duration = round($mp3info->{SECS}, 0);
+
     utf8::encode($title);
     utf8::encode($artist);
     utf8::encode($album);
     utf8::encode($comment);
 
-    $res = {"Artist" => $artist, "Title" => $title, "Album" => $album, "Time" => round($mp3info->{SECS},0), "File" => $file, "Cover" => ""};
+    $res = {"Artist" => $artist, "Title" => $title, "Album" => $album, "Time" => $duration, "File" => $file, "Cover" => ""};
     Log3  $hash, 5, "GetMP3Tags: ".Dumper($res);
 
     return $res;
