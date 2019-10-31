@@ -1,10 +1,11 @@
 
 ##############################################
-# $Id: $
+# $Id: 98_MediaList.pm 20005 2019-08-16 09:46:20Z Tobias.Faust $
 #
 # 98_MediaList.pm
 #
 # written by Tobias Faust 2016-12-19
+# contributions by Prof. Dr. Peter A. Henning 2019
 # e-mail: tobias dot faust at gmx dot net
 #
 ##############################################  
@@ -62,10 +63,12 @@ sub MediaList_Initialize($)
    $hash->{SetFn}    = "MediaList_Set";
 #   $hash->{DeleteFn} = "MediaList_Delete";
    $hash->{AttrList} = " MediaList_PlayerDevice". 
+                       " MediaList_PlayerType:SONOS,BOSE,MPD". # PAH
                        " MediaList_PathReplaceFrom". 
                        " MediaList_PathReplaceTo".
                        " MediaList_PathReplaceToPic".
                        " MediaList_PlayerStartCommand".
+                       " MediaList_PlayerImmediateCommand".
                        " MediaList_CacheFileDir". # TODO: $hash->{.PLAYLISTPATH} muss bei Änderung des CacheFileDir angepasst werden
                        " MediaList_mkTempCopy:none,copy,symlink".
 #                       " MediaList_allowedExtensions".
@@ -74,12 +77,14 @@ sub MediaList_Initialize($)
   # SetParamName -> Anzahl Paramter
   %sets = (
     "RequestedDirectory"    => { "count" => "1" },
-    "Play"                  => { "count" => "1", "args" => "currentdir,playlist" },
+    "Play"                  => { "count" => "2", "args" => "currentdir,playlist" },
     "Playlist_New"          => { "count" => "1"}, #Arg: PlaylistName, optional
     "Playlist_Name"         => { "count" => "1"}, #Arg: Name der Playlist
-    "Playlist_Add"          => { "count" => "1"}, #Medien aus CurrentDir werden hinzugefügt 
+    "Playlist_Add"          => { "count" => "2"}, #Medien aus CurrentDir werden hinzugefügt oder sofort abgespielt 
     "Playlist_Del"          => { "count" => "1"}, #Arg: TrackNr
     "Playlist_Empty"        => { "count" => "0", "args" => "noArg"}, #Leeren
+    "Playlist_Save"         => { "count" => "0", "args" => "noArg"}, #Sichern ohne abzuspielen
+    "Playlist_Read"         => { "count" => "0", "args" => "noArg"}, #Sichern ohne abzuspielen
 #    "Playlist_Drop"         => { "count" => "1"}  #Loeschen, erst relevant wenn abgespeicherte Playlist 
     "SortBy"                => { "count" => "1", "args" => "File,Title"}
   );
@@ -191,19 +196,28 @@ sub MediaList_Set($@)
   }
 
   if($cmd eq "Playlist_Add") {
-    return "given parameter not an integer value" if($par ne "" && $par !~ m/[0-9]+/);
-
-    MediaList_PlayListAdd($hash, $par);
+    Log 1," ===========> par=$par";
+    #-- first case: no parameter at all or a single numerical parameter 
+    #               or a single numerical parameter and "a"
+    if( ($par eq "") || ($par =~ m/[0-9]+(.*a)?$/) ){
+      $par =~ s/a//;
+      MediaList_PlayListAdd($hash, $par);
+    #--second case: single numerical parameter and "i"  
+    }elsif( $par =~ m/[0-9]+.*i$/ ){
+      $par =~ s/i//;
+      MediaList_PlayImmediate($hash, $par);
+    }else{
+      return "given parameter not an integer value";
+    }
   }
 
   if($cmd eq "Playlist_Name") {
     return "no name specified" if($par eq "");
-    ReadingsSingleUpdate($hash, "playlist", $par, 1);
+    readingsSingleUpdate($hash, "playlistname", $par, 1);
   }  
  
   if($cmd eq "Playlist_Del") {
     return "no track number specified" if($par !~ m/[0-9]+/);
-
     MediaList_PlayListDel($hash, $par);
   }
 
@@ -211,21 +225,34 @@ sub MediaList_Set($@)
     # gespeicherte Playlist auf HDD löschen
   }
 
+ if($cmd eq "Playlist_Save") {
+   my $dir = shift(@a);
+   MediaList_Create($hash, $dir, "");
+  }
+
   if($cmd eq "Play") {
-    my $PlayerDevice        = AttrVal($me, "MediaList_PlayerDevice", undef);
+    my $dir = shift(@a);
+    #-- check for device parameter
+    my $dev = shift(@a);
+    my $adev = AttrVal($me, "MediaList_PlayerDevice", undef);
+    
+    my $pldev;
     my $PlayerStartCommand  = AttrVal($me, "MediaList_PlayerStartCommand", undef);
-
-    return "no Playerdevice configured, please check Attribute MediaList_PlayerDevice" unless ($PlayerDevice);
-    return "Playerdevice not available: ".$PlayerDevice unless ($defs{$PlayerDevice});
-
-#    return "no startcommand for Playerdevice configured, please check attribute MediaList_PlayerStartCommand" unless ($PlayerStartCommand); 
-# der MPD braucht ein paar sekunden (update-db) um die neuen Files zu erkennen und abspielen zu können
-# beim MPD sollte dieses Attr also nicht gesetzt werden
- 
-    $par = "currentdir" if ($par eq ""); # kein Parameter, spiele  currentdir_playlist ab
-    return "Argument not known, keep empty for currentdir or \"playlist\" for your managed playlist" if $par !~ m/(currentdir|playlist)/;
-
-    MediaList_OnPlayPressed($hash, $par);
+    
+    #-- first case: no parameter at all. Device from attribute, play CurrentDir
+    if( !$dir && !$dev ){
+      $pldev = $adev;
+      $dir   = "currentdir";
+    #-- second case: parameter is currentdir|playlist. Device from next parameter or attribute
+    }elsif( $dir =~ /(currentdir)|(playlist)/ ){
+      $pldev = ($dev)?$dev:$adev;
+    #-- last case: Device from second parameter or attribute
+    }else{
+      $pldev = ($dev)?$dev:$adev;
+      $dir = "currentdir";
+    }
+    return "Argument not known, keep empty for currentdir or playlist for your managed playlist" if $dir !~ m/(currentdir|playlist)/;
+    MediaList_Create($hash, $dir, $pldev);
   }
 
   # sortiere Playlist nach Kriterien, zb. File, Title, Artist, etc
@@ -236,6 +263,7 @@ sub MediaList_Set($@)
     return "no currentdir_playlist available, please select one" if($json eq "[]");
 
     $json = MediaList_playlist_sort($json, $par, "asc"); 
+    
     readingsBeginUpdate($hash);
     readingsBulkUpdate($hash, "currentdir_playlist",  $json);
     readingsBulkUpdate($hash, "sortby",  $par);
@@ -252,42 +280,50 @@ sub MediaList_Set($@)
 ####################################
 # 
 ####################################
-sub MediaList_OnPlayPressed ($$) {
-  my ($hash, $pltype) = @_;
+sub MediaList_Create ($$$) {
+  my ($hash, $pltype, $pldev) = @_;
   my $me = $hash->{NAME};
 
-  my $PlayerDevice        = AttrVal($me, "MediaList_PlayerDevice", undef);
+  my $PlayerType            = AttrVal($me, "MediaList_PlayerType", undef);
   my $PathReplaceFrom    	= AttrVal($me, "MediaList_PathReplaceFrom", undef);
-  my $PathReplaceTo      	= AttrVal($me, "MediaList_PathReplaceTo", undef);
+  my $PathReplaceTo      	= AttrVal($me, "MediaList_PathReplaceTo", "");
   my $PlayerStartCommand  	= AttrVal($me, "MediaList_PlayerStartCommand", undef);
-  my $MediaList_CacheFileDir 	= AttrVal($me, "MediaList_CacheFileDir", "cache/");
+  my $MediaList_CacheFileDir= AttrVal($me, "MediaList_CacheFileDir", "cache/");
   my $MediaList_mkTempCopy	= AttrVal($me, "MediaList_mkTempCopy", "none");
   my $playlist;
   my $playlistduration;
-
-  return "an error occured in MediaList_OnPlayPressed" if (!$PlayerDevice);
   
   if ($pltype eq "currentdir") {
     $playlist = ReadingsVal($me, "currentdir_playlist", "");
     $playlistduration = ReadingsVal($me, "currentdir_playlistduration", "");
-  } elsif ($pltype eq "playlist") {
+  } else {
     $playlist = ReadingsVal($me, "playlist", "");
     $playlistduration = ReadingsVal($me, "playlistduration", "");
   }
 
   return "Playlist empty" unless($playlist);
 
-  my $file = $MediaList_CacheFileDir.$PlayerDevice.".m3u";
+  my $plname = ReadingsVal($me,"playlistname",$pldev); 
+  my $plfile   = $MediaList_CacheFileDir.$plname.".m3u";
+  
+  Log 1,"=============> file $plfile";
+  
+  #-- delete previous file
+  if( $PlayerType eq "BOSE" ){
+    unlink($PathReplaceFrom.$plname.".m3u");
+    Log 1, " ===> ".$PathReplaceFrom.$plname.".m3u deleted";
+  }
+  
   my @data = @{JSON::XS->new->decode($playlist)};
 
   my $fh;
-  my $hash_target = $defs{$PlayerDevice};
+  my $hash_target = $defs{$pldev};
   
   # check, if fhem system hardware supports symlinks
   my $symlink_check = eval{symlink("","");1};
   $MediaList_mkTempCopy = "copy" if($MediaList_mkTempCopy eq "symlink" && $symlink_check != 1);
 
-  # delete all outdated symbolic links
+  # delete all outdated symbolic links (VORSICHT! KANN ZUM DATENVERLUST FÜHREN)
   if ($symlink_check == 1) {
     opendir(my $dh, $MediaList_CacheFileDir) || die "Medialist: $MediaList_CacheFileDir: $!";
     while(my $filename = readdir($dh)) {
@@ -298,56 +334,109 @@ sub MediaList_OnPlayPressed ($$) {
     closedir($dh); # nicht vergessen
   }
 
-  $fh = new IO::File ">$file";
+  $fh = new IO::File ">$plfile";
+  
+  if( $fh ){
+    for(my $j=0; $j<=$#data; $j++) {
+  
+      my $utf8file = decode("UTF-8","$data[$j]->{File}");
+      my $newName = $MediaList_CacheFileDir.$me."_".basename($utf8file);
+      my $ret;
 
-  for(my $j=0; $j<=$#data; $j++) {
+      $newName =~ s/ä/ae/g;
+      $newName =~ s/ö/oe/g;
+      $newName =~ s/ü/ue/g;
+      $newName =~ s/Ä/Ae/g;
+      $newName =~ s/Ö/Oe/g;
+      $newName =~ s/Ü/Ue/g;
+      $newName =~ s/ß/ss/g;
 
-    my $utf8file = decode("UTF-8","$data[$j]->{File}");
-    my $newName = $MediaList_CacheFileDir.$me."_".basename($utf8file);
+      if ($MediaList_mkTempCopy eq "symlink") {
+        $ret = symlink($utf8file, $newName);
+        $data[$j]->{File} =  basename($newName);
+      } elsif ($MediaList_mkTempCopy eq "copy") {
+        $ret = copy($utf8file, $newName);	  
+        $data[$j]->{File} =  basename($newName);
+      } else {
+        $data[$j]->{File} = $utf8file;
+      }
 
-    $newName =~ s/ä/ae/g;
-    $newName =~ s/ö/oe/g;
-    $newName =~ s/ü/ue/g;
-    $newName =~ s/Ä/Ae/g;
-    $newName =~ s/Ö/Oe/g;
-    $newName =~ s/Ü/Ue/g;
-    $newName =~ s/ß/ss/g;
-
-    if ($MediaList_mkTempCopy eq "symlink") {
-      symlink($utf8file, $newName);
-	  $data[$j]->{File} =  basename($newName);
-    } elsif ($MediaList_mkTempCopy eq "copy") {
-      copy($utf8file, $newName);	  
-      $data[$j]->{File} =  basename($newName);
-    } else {
-      $data[$j]->{File} = $utf8file;
+      #-- PathReplaceTomay be missing, in this case only delete PathReplaceFrom
+      if ($PathReplaceFrom && $PathReplaceTo){ 
+        $data[$j]->{File} =~ s/^($PathReplaceFrom)/$PathReplaceTo/ ;
+      }elsif ($PathReplaceFrom){
+        $data[$j]->{File} =~ s/^($PathReplaceFrom)// ;
+      }
+      $fh->print("". encode("UTF-8", $data[$j]->{File}) ."\n");
+      Log3 $hash->{NAME}, 5, "MediaList: File prepared for player $pldev: ".$data[$j]->{File};
     }
-
-    $data[$j]->{File} =~ s/^($PathReplaceFrom)/$PathReplaceTo/ if ($PathReplaceFrom && $PathReplaceTo);
-
-    $fh->print("". encode("UTF-8", $data[$j]->{File}) ."\n");
-    Log3 $PlayerDevice, 5, "OnPlayPressed: File prepared for Player $PlayerDevice: ".$data[$j]->{File};
+    close($fh);
+  }else{
+    Log3  $hash->{NAME}, 1, "MediaList: Error, file $plfile could not be opened";
   }
 
-  close($fh);
-
-  readingsBeginUpdate($hash_target);
-  readingsBulkUpdate($hash_target, "playlist_json", $playlist);
-  readingsBulkUpdate($hash_target, "playlistduration", $playlistduration);
-  readingsEndUpdate($hash_target, 1);
+  #-- copy directly to device only if SONOS or MPD
+  if( $PlayerType ne "BOSE" ){
+    readingsBeginUpdate($hash_target);
+    readingsBulkUpdate($hash_target, "playlist_json", $playlist);
+    readingsBulkUpdate($hash_target, "playlistduration", $playlistduration);
+    readingsEndUpdate($hash_target, 1);
+  }
+  #-- copy to target directory
+  my $ret=copy($plfile,$PathReplaceFrom);
   
-  if ($PlayerStartCommand) {
-    my($cmd_file, $cmd_dir, $cmd_ext) = fileparse($file, qr"\..[^.]*$");
+  #-- start playing at the specified device
+  if ($PlayerStartCommand && ($pldev ne "") ) {
+    return "Player device not available: ".$pldev unless ($defs{$pldev});
+   
+    my($cmd_file, $cmd_dir, $cmd_ext) = fileparse($plfile, qr"\..[^.]*$");
   
-    $PlayerStartCommand =~ s/\<fullfile\>/$file/;
+    $PlayerStartCommand =~ s/\<fullfile\>/$plfile/;
     $PlayerStartCommand =~ s/\<filename\>/$cmd_file/;
     $PlayerStartCommand =~ s/\<fileext\>/$cmd_ext/;
-
-    Log3 $hash->{NAME}, 5, "MediaList: Starte Player mit: set ".$PlayerDevice." ".$PlayerStartCommand;
-    fhem ("set ".$PlayerDevice." ".$PlayerStartCommand);
+    $PlayerStartCommand =~ s/\<device\>/$pldev/;
+    Log3  $hash->{NAME}, 1, "MediaList: Start player with: set ".$pldev." ".$PlayerStartCommand;
+    fhem ("set ".$pldev." ".$PlayerStartCommand);
   }
 
   return undef; 
+}
+
+##################################
+# PlayImmediate
+# Parameter: Tracknummer
+##################################
+sub MediaList_PlayImmediate($$) {
+  my ($hash, $par) = @_;
+  my $me = $hash->{NAME};
+
+  my $curpl    = ReadingsVal($me, "currentdir_playlist", "");
+  #my $curpldur = ReadingsVal($me, "currentdir_playlistduration", 0);
+  #my $pl       = ReadingsVal($me, "playlist", "");
+  #my $pldur    = ReadingsVal($me, "playlistduration", 0);
+  my $PathReplaceFrom    	= AttrVal($me, "MediaList_PathReplaceFrom", undef);
+  my $PathReplaceTo      	= AttrVal($me, "MediaList_PathReplaceTo", "");
+  my $PlayerStartCommand  	= AttrVal($me, "MediaList_PlayerStartCommand", undef);
+  return "Playlist empty" unless($curpl);
+
+  my @curpldata;
+  my @pldata;
+  @curpldata    = @{JSON::XS->new->decode($curpl)};
+
+  return "Invalid track number, only ". $#curpldata ." tracks available" if($par>(scalar @curpldata));
+  
+  push(@pldata, $curpldata[$par]);
+ 
+  my $utf8file = decode("UTF-8","$curpldata[$par]->{File}");
+
+  #-- PathReplaceTomay be missing, in this case only delete PathReplaceFrom
+  if ($PathReplaceFrom && $PathReplaceTo){ 
+    $utf8file =~ s/^($PathReplaceFrom)/$PathReplaceTo/ ;
+  }elsif ($PathReplaceFrom){
+    $utf8file =~ s/^($PathReplaceFrom)// ;
+  }
+  Log3 $hash->{NAME}, 1, "MediaList: File prepared for player ".$utf8file;
+
 }
 
 ###################################
@@ -360,17 +449,17 @@ sub MediaList_PlayListAdd($$) {
   my ($hash, $par) = @_;
   my $me = $hash->{NAME};
 
-  my $curpl = ReadingsVal($me, "currentdir_playlist", "");
+  my $curpl    = ReadingsVal($me, "currentdir_playlist", "");
   my $curpldur = ReadingsVal($me, "currentdir_playlistduration", 0);
-  my $pl = ReadingsVal($me, "playlist", "");
-  my $pldur = ReadingsVal($me, "playlistduration", 0);
+  my $pl       = ReadingsVal($me, "playlist", "");
+  my $pldur    = ReadingsVal($me, "playlistduration", 0);
 
   return "Playlist empty" unless($curpl);
 
   my @curpldata;
   my @pldata;
   @curpldata    = @{JSON::XS->new->decode($curpl)};
-  @pldata       = @{JSON::XS->new->decode($pl)}     if($pl ne "");
+  @pldata       = @{JSON::XS->new->decode($pl)}     if($pl ne "");    # CRASH HERE
 
   if($par eq "") {
     # alles übergeben
@@ -378,7 +467,7 @@ sub MediaList_PlayListAdd($$) {
     $pldur += $curpldur;
   } else {
     return "Argument not an integer" if($par !~ m/[0-9]+/);
-    return "Invalid track number, only ". $#curpldata ." Tracks available" if($par>(scalar @curpldata));
+    return "Invalid track number, only ". $#curpldata ." tracks available" if($par>(scalar @curpldata));
     push(@pldata, $curpldata[$par]);
     $pldur += $curpldata[$par]->{Time};
   }
@@ -410,7 +499,7 @@ sub MediaList_PlayListDel($$) {
   my @pldata;
   @pldata    = @{JSON::XS->new->decode($pl)};
 
-  return "Invalid track number, only ". $#pldata ." Tracks available" if($par>(scalar @pldata));
+  return "Invalid track number, only ". $#pldata ." tracks available" if($par>(scalar @pldata));
   
   $pldur -= $pldata[$par]->{Time};
   splice(@pldata, $par, 1);
@@ -499,13 +588,13 @@ sub MediaList_CollectID3Tags ($) {
   my $time = time();
   
   my $MediaList_CacheFileDir = AttrVal($device, "MediaList_CacheFileDir", "cache/");
-  my $file = $MediaList_CacheFileDir.'covers.txt'; #Format: Artist;Album;Url
+  my $cofile = $MediaList_CacheFileDir.'covers.txt'; #Format: Artist;Album;Url
 
   return "Objekt ($object) exitiert nicht" unless (-e $object);
 
   #lade cover in das Hash
-  if (-e $file) {
-    open($fh, "<", $file) or die "Datei nicht gefunden";
+  if (-e $cofile) {
+    open($fh, "<", $cofile) or die "Datei nicht gefunden";
     my @Zeilen = <$fh>;
     chomp(@Zeilen);
     close($fh);
@@ -814,9 +903,9 @@ sub MediaList_Crawl($$) {
 
     opendir(my $dh, $startdir) || die "$startdir: $!";
     while(my $filename =  readdir($dh)) {
-      if($filename !~ m/^\..*/) {
-        #Log3 undef, 3, "Datei: ".$filename; 
-        $filename = $FolderIdent . $filename if(-d $startdir."/".$filename);
+      #-- PAH
+      if( ($filename !~ m/^\..*/) && (-d $startdir."/".$filename) ) {
+        $filename = $FolderIdent . $filename;
         push(@list, $filename);
       } 
     }
@@ -841,21 +930,20 @@ sub MediaList_Crawl($$) {
 
 =pod
 =item helper
-=item summary    creates an MediaList based on an local Mediashare for submission to any devices
-=item summary_DE Erstellt eine Playlist aus lokaler Musik zur Übergabe an ein beliebiges Device
+=item summary    Creates a playlist based on a local media share for submission to an arbitrary device
+=item summary_DE Erstellt eine Playlist einem lokalen Musikverzeichnis zur Übergabe an ein beliebiges Device
 =begin html
 
 <a name="MediaList"></a>
 <h3>MediaList</h3>
 <ul>
-  This module can support you to navigate trough you local connected
-  music library. It can compile complex playlists and als an quick playing of 
-  an selected whole path.
+  This module allows to navigate trough a locally connected
+  music library. It can compile complex playlists and also allows a quick playing of 
+  a selected directory
   <br>
-  Note: this module needs the following additional modules:<br>
+  Note: this module needs the following additional Perl modules:<br>
   <ul>
     <li>libmp3-tag-perl</li> 
-
     <li>libjson-xs-perl</li> 
     <li>libmp3-info-perl</li>
   </ul>
@@ -864,11 +952,11 @@ sub MediaList_Crawl($$) {
   <a name="MediaList define"></a>
   <b>Define</b>
   <ul>
-    <code>define &lt;name&gt; MediaList &lt;RootPath&gt; </code>
+    <code>define &lt;name&gt; MediaList &lt;root path&gt; </code>
     <br><br>
-    Defines a new instanze of MediaList. The Rootpath defines your start directory.
+    Defines an instance of MediaList. The root path denotes the top directory.
     <br>
-    Examples:
+    Example:
     <ul>
       <code>define MyMediaList MediaList /media/music</code><br>
     </ul>
@@ -878,13 +966,13 @@ sub MediaList_Crawl($$) {
   <a name="MediaListReadings"></a>
   <b>Readings</b><br>
   <ul>
-    <li><b>CurrentDir</b>:your navigated current directory</li>
+    <li><b>CurrentDir</b>:the current directory</li>
     <li><b>FolderContent</b>:the folder content of CurrentDir</li>
-    <li><b>SelectedItem</b>:the last selected Item from FolderContent</li>
+    <li><b>SelectedItem</b>:the last selected item from FolderContent</li>
     <li><b>currentdir_playlist</b>:playlist of CurrentDir</li>
     <li><b>currentdir_playlistduration</b>:duration of currentdir_playlist</li>
-    <li><b>playlist</b>:your playlist ;)</li>
-    <li><b>playlistduration</b>:duration of your playlist</li>
+    <li><b>playlist</b>:actual playlist ;)</li>
+    <li><b>playlistduration</b>:duration of actual playlist</li>
   </ul>
   <br>
 
@@ -899,51 +987,56 @@ sub MediaList_Crawl($$) {
       </ul>
     </li>
 
-    <li><b>Play</b><br>
-      Submit the Playlist to your defined Targetdevice. You has to select which playlist you want to submit<br>
-      <li><b>currentdir</b>: Submit the playlist of current directory, see Reading <i>currentdir_playlist</i></li>
-      <li><b>playlist</b>: Submit the real playlist, see Reading <i>playlist</i></li>
-      <br>Example:<br>
+    <li><b>Play currentdir|playlist [&lt;device&gt;]</b><br>
+      Submit the playlist to the target device. If the second parameter is <b>currentdir</b>, this will be the complete content of the current directory, see reading <i>currentdir_playlist</i>. 
+      If the second parameter is <b>playlist</b> this will be the playlist created with the module, see reading <i>playlist</i>
+      The third parameter is optional and denotes the target device. This will overwrite the value of the attribute MediaList_PlayerDevice.
+      <br>Examples:<br>
       <ul>
-        <code>set &lt;MyMediaList&gt; Play currentdir</code><br>
+        <code>set &lt;MyMediaList&gt; Play currentdir SoundTouch.EG</code><br>
         <code>set &lt;MyMediaList&gt; Play playlist</code><br>
       </ul>
     </li>
 
     <li><b>Playlist_New</b><br>
-      Creates an new playlist.
+      Creates a new playlist.
       <br>Example:<br>
       <ul>
         <code>set &lt;MyMediaList&gt; Playlist_New MyNewPlaylist</code><br>
       </ul>
     </li>
 
-    <li><b>Playlist_Add</b><br>
-      Add an Track or complete currentdir to your playlist<br>
+    <li><b>Playlist_Add [&lt;number&gt;] [a|i]</b><br>
+      If the value of the second parameter is a=add or missing, the 
+      track with the given number or the complete CurrentDir are added to the playlist<br>
+      If the value of the second parameter is i=immediately, the current filename is passed to the 
       <br>Example:
       <ul>
         <code>set &lt;MyMediaList&gt; Playlist_Add 0</code><br>
-        Add first Track from Reading <i>currentdir_playlist</i> to your playlist<br>
+        Add first track from reading <i>currentdir_playlist</i> to the playlist<br>
         <code>set &lt;MyMediaList&gt; Playlist_Add</code><br>
-        Add all Tracks from Reading <i>currentdir_playlist</i> to your playlist<br>
+        Add all tracks from reading <i>currentdir_playlist</i> to the playlist<br>
       </ul>
     </li>
 
     <li><b>Playlist_Del</b><br>
-      Deletes an Track from your playlist.
+      Deletes a track from the playlist.
       <br>Example:<br>
       <ul>
         <code>set &lt;MyMediaList&gt; Playlist_Del 0</code><br>
-        Drops first Track from your Playlist
+        Drops the first track from the playlist
       </ul>
     </li>
 
     <li><b>Playlist_Empty</b><br>
-      Makes your playlist empty.
-      <br>Example:<br>
-      <ul>
-        <code>set &lt;MyMediaList&gt; Playlist_Empty</code><br>
-      </ul>
+      Clears the content of the playlist
+    </li>
+    
+     <li><b>Playlist_Save</b><br>
+      Saves the playlist under the given name &lt;MediaList_PathReplaceTo&gt;&lt;Playlist_Name&gt;.m3u
+    </li>
+     <li><b>Playlist_Read</b><br>
+      Reads a playlist with the given name &lt;MediaList_PathReplaceTo&gt;&lt;Playlist_Name&gt;.m3u
     </li>
 
     
@@ -958,54 +1051,36 @@ sub MediaList_Crawl($$) {
   <b>Attributes</b>
   <ul>
     <li><b>MediaList_PlayerDevice</b><br>
-      Definition of your Traget Player Device
+      Definition of the target player device (may be overwritten by the set .. Play command).
       <br>Example:
       <ul>
         <code>attr &lt;MyMediaList&gt; MediaList_PlayerDevice Sonos_LivingRoom</code><br>
         <br>
       </ul>
+    </li>  
+     <li><b>MediaList_PlayerType</b><br>
+      Definition of your target player type - can be SONOS, BOSE or MPD
     </li> 
-
     <li><b>MediaList_PathReplaceFrom</b><br>
-      Rewrite the local mediapath to an accessible path by Targetdevice. This Attribut define the FROM pattern.
-      <br>Example:
-      <ul>
-        <code>attr &lt;MyMediaList&gt; MediaList_PathReplaceFrom /media/music/</code><br>
-        <br>
-      </ul>
+      Rewrite the local media path to a path accessible by the target device, FROM pattern
     </li>
-
     <li><b>MediaList_PathReplaceTo</b><br>
-      Rewrite the local mediapath to an accessible path by Targetdevice. This Attribut define the TO pattern.
-      <br>Example:
-      <ul>
-        <code>attr &lt;MyMediaList&gt; MediaList_PathReplaceTo \\NAS/music/</code><br>
-        <br>
-      </ul>
+      Rewrite the local media path to a path accessible by the target device, TO pattern.
+      If this TO pattern is omitted, the local media path is simply erased.
     </li>
-
     <li><b>MediaList_PathReplaceToPic</b><br>
-      Rewrites the local Cover path to an accessible path your Webbrowser, TabletUI. This Attribut define the TO pattern.
-      The FROM pattern are defined by <i>MediaList_PathReplaceFrom</i>
-      <br>Example:
-      <ul>
-        <code>attr &lt;MyMediaList&gt; MediaList_PathReplaceToPic https://192.168.1.30/music/</code><br>
-        <br>For this example you has to share your music directory via Webserver
-      </ul>
+      Rewrites the local cover path to a path accessible by web browser and TabletUI, TO pattern.
+      The FROM pattern is defined by <i>MediaList_PathReplaceFrom</i>
     </li>
-
     <li><b>MediaList_PlayerStartCommand</b><br>
-      Definition of the Startcommand for your Targetdevice.
-      <br>Example:
-      <ul>
-        <code>attr &lt;MyMediaList&gt; MediaList_PlayerStartCommand StartPlaylist file:&lt;fullfile&gt;</code><br>
-        <br> Command to insert the playlist into your Targetdevice ans starts playing. The definition of <i>fullfile</i> 
-        defines a internal dummy to rewrite it by a real playlistname
-      </ul>
-    </li>
-    
+      Definition of the start command to play a playlist on your target device. This command may contain the strings <code>&lt;fullfile&gt;</code>, 
+      which on execution are replaced by the filename of the playlist.
+    <li><b>MediaList_PlayerImmediateCommand</b><br>
+      Definition of the command to play a file immediately on your target device. This command may contain the strings <code>&lt;fullfile&gt;</code>, 
+      which on execution are replaced by the filename of the playlist. 
+    </li>   
     <li><b>MediaList_CacheFileDir</b><br>
-      Definition of your cachefiledir. In this directory the playlist.m3u will be created. In cases of symlinks or 
+      Definition of your cache directory, in which the playlist.m3u will be created. In case of symlinks or 
       music-copies, this directory will be used
       <br>Example:
       <ul>
@@ -1015,15 +1090,15 @@ sub MediaList_Crawl($$) {
     </li>
 
     <li><b>MediaList_mkTempCopy</b><br>
-      Definition if you want a playlist with remote files or local accessible files.<br>
-      In case of using an sonos device, an remote file based playlist is sufficient.<br>
+      Specify if you want a playlist with remote files or locally accessible files.<br>
+      In case of using a SONOS or BOSE device, a remote file based playlist is sufficient.<br>
       In case of using an MPD, local files in MPD music directory must be used
       <br>Example:
       <ul>
         <code>attr &lt;MyMediaList&gt; MediaList_mkTempCopy none</code><br>
-        In case of an Sonos Device<br>
+        In case of a SONOS or BOSE device<br>
         <code>attr &lt;MyMediaList&gt; MediaList_mkTempCopy symlink</code><br> 
-        In case of an MPD Device
+        In case of an MPD device -- what ??
       </ul>
     </li>
 
