@@ -587,6 +587,18 @@ sub Text2Speech_PrepareSpeech($$) {
   my $TTS_ForceSplit = 0;
   my $TTS_AddDelimiter;
 
+  # Cleanup string
+  $hash->{helper}{TTS_PlayerOptions} = "";
+  while ($t =~ s/^ //isg) {};
+  $t =~ s/^'(.*)'$/$1/;
+  $t =~ s/^"(.*)"$/$1/;
+
+  # Check text for command string
+  if ($t =~ /^\[(.*?)\](.*?)$/) {
+      ($hash->{helper}{TTS_PlayerOptions}, $t) = ($1, $2);
+      while ($t =~ s/^ //isg) {};
+  }
+
   if($TTS_Delimiter && $TTS_Delimiter =~ m/^[+-]a[lfn]/i) {
     $TTS_ForceSplit = 1 if(substr($TTS_Delimiter,0,1) eq "+");
     $TTS_ForceSplit = 0 if(substr($TTS_Delimiter,0,1) eq "-");
@@ -779,6 +791,7 @@ sub Text2Speech_BuildMplayerCmdString($$) {
     $TTS_MplayerCall =~ s/{volume}/$hash->{VOLUME}/g;
     $TTS_MplayerCall =~ s/{volumeadjust}/$TTS_VolumeAdjust/g;
     $TTS_MplayerCall =~ s/{file}/$file/g;
+    $TTS_MplayerCall =~ s/{options}/$hash->{helper}{TTS_PlayerOptions}/g;
 
     $cmd = $TTS_MplayerCall;
   } else {
@@ -1311,7 +1324,7 @@ sub Text2Speech_WriteStats($$$$){
 <b>Attributes</b>
 <ul>
   <li>TTS_Delimiter<br>
-    optional: By using the google engine, its not possible to convert more than 100 characters in a single audio brick.
+    Optional: By using the google engine, its not possible to convert more than 100 characters in a single audio brick.
     With a Delimiter the audio brick will be split at this character. A Delimiter must be a single character.!<br>
     By default, ech audio brick will be split at sentence end. Is a single sentence longer than 100 characters,
     the sentence will be split additionally at comma, semicolon and the word <i>and</i>.<br>
@@ -1319,7 +1332,7 @@ sub Text2Speech_WriteStats($$$$){
   </li>
 
   <li>TTS_Ressource<br>
-    optional: Selection of the Translator Engine<br>
+    Optional: Selection of the Translator Engine<br>
     Notice: Only available in locally instances!
     <ul>
       <li>Google<br>
@@ -1402,10 +1415,16 @@ sub Text2Speech_WriteStats($$$$){
         <li>{volume}</li>
         <li>{volumeadjust}</li>
         <li>{file}</li>
+        <li>{options}</li>
     </ul>
+    {options} are set as text in parentheses when calling set. Used for example to set special parameters for each call separately<br>
+    Example: <code>set myTTS tts [192.168.0.1:7000] This is my text</code><br><br>
+
     Examples:<br>
     <code>attr myTTS TTS_MplayerCall sudo /usr/bin/mplayer</code><br>
     <code>attr myTTS TTS_MplayerCall AUDIODEV={device} play -q -v {volume} {file}</code><br>
+    <code>attr myTTS TTS_MplayerCall player {file} {options}</code><br>
+
   </li>
 
   <li>TTS_SentenceAppendix<br>
@@ -1685,10 +1704,15 @@ sub Text2Speech_WriteStats($$$$){
         <li>{volumeadjust}</li>
         <li>{file}</li>
     </ul>
-    Beispiele:<br>
-    <code>attr myTTS TTS_MplayerCall sudo /usr/bin/mplayer</code>
-    <code>attr myTTS TTS_MplayerCall AUDIODEV={device} play -q -v $(({volume}*{volumeadjust}/10000)).$(({volume}*{volumeadjust}%10000)) {file}</code>
-  </li>
+    {options} werden als Text in Klammern beim Aufruf von set gesetzt, um beispielsweise spezielle Parameter für jeden Aufruf
+    separat zu setzen<br>
+    Beispiel: <code>set myTTS tts [192.168.0.1:7000] Das ist mein Text</code><br><br>
+
+     Beispiele:<br>
+     <code>attr myTTS TTS_MplayerCall sudo /usr/bin/mplayer</code><br>
+     <code>attr myTTS TTS_MplayerCall AUDIODEV={device} play -q -v {volume} {file}</code><br>
+    <code>attr myTTS TTS_MplayerCall player {file} {options}</code><br>
+</li>
 
   <li>TTS_SentenceAppendix<br>
     Optional: Angabe einer mp3-Datei die mit jeder Sprachausgabe am Ende ausgegeben wird.<br>
