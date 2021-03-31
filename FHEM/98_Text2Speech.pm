@@ -15,8 +15,6 @@
 # ALL     ALL = NOPASSWD: /usr/bin/mplayer
 ##############################################
 
-# VoiceRSS: http://www.voicerss.org/api/documentation.aspx
-
 package main;
 use strict;
 use warnings;
@@ -240,37 +238,37 @@ sub Text2Speech_loadmodules($$) {
     require IO::File;
     IO::File->import;
     1;
-  } or return "IO::File Module not installed, please install";
+  } or return "IO::File Module not installed. Please install.";
 
   eval {
     require Digest::MD5;
     Digest::MD5->import;
     1;
-  } or return "Digest::MD5 Module not installed, please install";
+  } or return "Digest::MD5 Module not installed. Please install.";
 
   eval {
     require URI::Escape;
     URI::Escape->import;
     1;
-  } or return "URI::Escape Module not installed, please install";
+  } or return "URI::Escape Module not installed. Please install.";
 
   eval {
     require Text::Iconv;
     Text::Iconv->import;
     1;
-  } or return "Text::Iconv Module not installed, please install";
+  } or return "Text::Iconv Module not installed. Please install.";
 
   eval {
     require Encode::Guess;
     Encode::Guess->import;
     1;
-  } or return "Encode::Guess Module not installed, please install";
+  } or return "Encode::Guess Module not installed. Please install.";
 
   eval {
     require MP3::Info;
     MP3::Info->import;
     1;
-  } or return "MP3::Info Module not installed, please install";
+  } or return "MP3::Info Module not installed. Please install.";
 
   if ($TTS_Ressource eq "Amazon-Polly") {
     # Module werden nur benötigt mit der Polly Engine
@@ -278,7 +276,7 @@ sub Text2Speech_loadmodules($$) {
       require Paws::Polly;
       Paws::Polly->import;
       1;
-    } or return "Paws Module not installed. Please install, goto https://metacpan.org/source/JLMARTIN/Paws-0.39";
+    } or return "Paws Module not installed. Please install.";
 
     eval {
       require File::HomeDir;
@@ -1225,8 +1223,8 @@ sub Text2Speech_WriteStats($$$$){
 
 =pod
 =item helper
-=item summary    speaks given text via loudspeaker
-=item summary_DE wandelt Text in Sprache um zur Ausgabe auf Lautsprecher
+=item summary    A module that converts text to speech and also plays the result on a local or remote loudspeaker
+=item summary_DE Modul, das Text in Sprache umwandelt und das Ergebnis über einen lokalen oder entfernten Lautsprecher wiedergibt
 =begin html
 
 <a name="Text2Speech"></a>
@@ -1241,20 +1239,22 @@ sub Text2Speech_WriteStats($$$$){
     <b>Server: </b><code>define &lt;name&gt; Text2Speech none</code><br>
     <p>
     This module converts any text into speech with several possible providers. The Device can be defined as locally
-    or remote device.
+    or remote instance.
     </p>
 
     <li>
       <b>Local Device</b><br>
       <ul>
-        The output will be sent to any connected audio device. For example external speakers connected per jack
-        or with Bluetooth speakers - connected per Bluetooth dongle. It's important to install mplayer.<br>
+        The output will be sent to any connected audio device. For example speakers connected per jack,
+        network, WiFI or Bluetooth. Playback can be done using MPlayer or any other application.<br>
+        <br>
+        Mplayer installation under Debian/Ubuntu/Raspbian:<br>
         <code>apt-get install mplayer</code><br>
         The given alsa device has to be configured in <code>/etc/asound.conf</code>
         <p>
           <b>Special AlsaDevice: </b><i>default</i><br>
-          The internal mplayer command will be without any audio directive if the given alsa device is <i>default</i>.
-          In this case mplayer is using the standard audio device.
+          The internal Mplayer command will be without any audio directive if the given alsa device is <i>default</i>.
+          In this case Mplayer is using the standard audio device.
         </p>
         <p>
           <b>Example:</b><br>
@@ -1267,7 +1267,7 @@ sub Text2Speech_WriteStats($$$$){
     <li>
       <b>Remote Device</b><br>
       <ul>
-        This module can be configured as remote-device for client-server Environments. The Client has to be configured
+        This module can be configured as remote-device for client-server environments. The Client has to be configured
         as local device.<br>
         Notice: the Name of the locally instance has to be the same!
         <ul>
@@ -1288,7 +1288,7 @@ sub Text2Speech_WriteStats($$$$){
     <li>
       <b>Server Device</b>
       <ul>
-        In case of an usage as a Server, only the mp3 file will be generated and displayed as lastFilename reading. It makes no sense to use the attribute <i>TTS_speakAsFastAsPossible</i> here.
+        In case of an usage as a server, only the mp3 file will be generated and displayed as lastFilename reading. It makes no sense to use the attribute <i>TTS_speakAsFastAsPossible</i> here.
         Its recommend, to use the attribute <i>TTS_useMP3Wrap</i>. Otherwise only the last audiobrick will be shown in reading <i>lastFilename</i>.
       </ul>
       <p>
@@ -1324,9 +1324,9 @@ sub Text2Speech_WriteStats($$$$){
 <b>Attributes</b>
 <ul>
   <li>TTS_Delimiter<br>
-    Optional: By using the google engine, its not possible to convert more than 100 characters in a single audio brick.
-    With a Delimiter the audio brick will be split at this character. A Delimiter must be a single character.!<br>
-    By default, ech audio brick will be split at sentence end. Is a single sentence longer than 100 characters,
+    Optional: By using the Google engine, its not possible to convert more than 100 characters in a single audio brick.
+    With a delimiter the audio brick will be split at this character. A delimiter must be a single character!<br>
+    By default, each audio brick will be split at sentence end. Is a single sentence longer than 100 characters,
     the sentence will be split additionally at comma, semicolon and the word <i>and</i>.<br>
     Notice: Only available in locally instances with Google engine!
   </li>
@@ -1336,21 +1336,20 @@ sub Text2Speech_WriteStats($$$$){
     Notice: Only available in locally instances!
     <ul>
       <li>Google<br>
-        Using the Google Engine. It´s nessessary to have internet access. This engine is the recommend engine
-        because the quality is fantastic. This engine is using by default.
+        Google Engine. Prerequisite: Active Internet connection<br>
+        This engine is recommended for its quality and is used by default.
       </li>
       <li>VoiceRSS<br>
-        Using the VoiceRSS Engine. Its a free engine till 350 requests per day. If you need more, you have to pay.
-        It´s nessessary to have internet access. This engine is the 2nd recommend engine
-        because the quality is also fantastic. To use this engine you need an APIKey (see TTS_APIKey)
+        VoiceRSS Engine. Prerequisite: Active Internet connection<br>
+        Free of charge up to 350 requests per day. If you need more, you have to pay.
+        This engine is also recommended due to its quality. To use this engine, you need an APIKey (see TTS_APIKey)
       </li>
       <li>ESpeak<br>
-        Using the ESpeak Engine. Installation Espeak and lame is required.<br>
-        <code>apt-get install espeak lame</code>
+        eSpeak Engine. Prerequisite: Installation of Espeak and lame<br>
+        eSpeak is an open source software speech synthesizer for English and other languages.
       </li>
 	  <li>SVOX-pico<br>
-        Using the SVOX-Pico TTS-Engine (from the AOSP).<br>
-        Installation of the engine and <code>lame</code> is required:<br>
+        SVOX-Pico TTS-Engine (from the AOSP). Prerequisite: Installation of SVOX-Pico and lame<br>
         <code>sudo apt-get install libttspico-utils lame</code><br><br>
         On ARM/Raspbian the package <code>libttspico-utils</code>,<br>
         so you may have to compile it yourself or use the precompiled package from <a target="_blank" href"http://www.robotnet.de/2014/03/20/sprich-freund-und-tritt-ein-sprachausgabe-fur-den-rasberry-pi/">this guide</a>, in short:<br>
@@ -1360,8 +1359,8 @@ sub Text2Speech_WriteStats($$$$){
         <code>sudo dpkg --install pico2wave.deb</code>
       </li>
       <li>Amazon-Polly<br>
-       Using the Amazon Polly engine, the same as Amazon Alexa.<br>
-       The perl package Paws is required. An AWS Access and Polly Aws User is required too<br>
+       Amazon Polly Engine. Prerequisite: Active Internet connection, Perl package Paws<br>
+       Amazon service that turns text into lifelike speech. An AWS Access and Polly Aws User is required.<br>
        <code>cpan paws</code><br>
        The credentials to your AWS Polly are expected at ~/.aws/credentials<br>
        <code>[default]
@@ -1378,38 +1377,37 @@ sub Text2Speech_WriteStats($$$$){
 
   <li>TTS_Language_Custom<br>
     If you want another engine and speech of default languages, you can insert this here.<br>
-    The definition is dependent of used engine. This attribute overrides an TTS_Language attribute.<br>
-    Please refer the specific API reference.
+    The definition depends on the used engine. This attribute overrides an TTS_Language attribute.<br>
+    Please refer to the specific API reference.
   </li>
 
   <li>TTS_APIKey<br>
     An APIKey is needed if you want to use VoiceRSS. You have to register at the following page:<br>
-    http://www.voicerss.org/registration.aspx <br>
-    After this, you will get your personal APIKey.
+    http://www.voicerss.org/registration.aspx
   </li>
 
   <li>TTS_User<br>
-    Actual without any usage. Needed in case if a TTS Engine needs a username and an apikey for each request.
+    Actual without any usage. Needed in case if a TTS Engine needs a username and an APIKey for a request.
   </li>
 
   <li>TTS_CacheFileDir<br>
-    Optional: The downloaded Google audio bricks are saved in this folder for reusing.
-    No automatically implemented deleting are available.<br>
+    Optional: The downloaded Google audio bricks are saved in this folder.
+    No automatic delete/cleanup available.<br>
     Default: <i>cache/</i><br>
-    Notice: Only available in locally instances!
+    Notice: Available on local instances only!
   </li>
 
   <li>TTS_UseMP3Wrap<br>
     For best voice output, it is recommended that the individual downloads are combined into a single file.
-    Each downloaded audio bricks are concatinated to a single audio file to play with mplayer.<br>
-    Installtion of the mp3wrap source is required.<br>
+    Each downloaded audio bricks are concatinated to a single audio file to play with Mplayer.<br>
+    Installtion of the mp3wrap package is required.<br>
     <code>apt-get install mp3wrap</code><br>
-    Notice: Only available in locally instances!
+    Notice: Available on local instances only!
   </li>
 
   <li>TTS_MplayerCall<br>
-    Optional: Definition of the system call to Mplayer or a different tool. <br>
-    If a tool other than mplayer is used, the following templates apply:<br>
+    Optional: Definition of the system call to Mplayer or a different tool.<br>
+    If a tool other than Mplayer is used, the following templates apply:<br>
     <ul>
         <li>{device}</li>
         <li>{volume}</li>
@@ -1417,7 +1415,8 @@ sub Text2Speech_WriteStats($$$$){
         <li>{file}</li>
         <li>{options}</li>
     </ul>
-    {options} are set as text in parentheses when calling set. Used for example to set special parameters for each call separately<br>
+    {options} are provided inside the text in parentheses during the set command.
+    Used for example to set special parameters for each call separately<br>
     Example: <code>set myTTS tts [192.168.0.1:7000] This is my text</code><br><br>
 
     Examples:<br>
@@ -1429,7 +1428,7 @@ sub Text2Speech_WriteStats($$$$){
 
   <li>TTS_SentenceAppendix<br>
     Optional: Definition of one mp3-file to append each time of audio response.<br>
-    Using of Mp3Wrap is required. The audio bricks has to be downloaded before into CacheFileDir.
+    Mp3Wrap is required. The audio chunks must be downloaded to the CacheFileDir beforehand.
     Example: <code>silence.mp3</code>
   </li>
 
@@ -1448,19 +1447,21 @@ sub Text2Speech_WriteStats($$$$){
   </li>
 
   <li>TTS_VolumeAdjust<br>
-    Basic volume increase.
+    Basic volume increase<br>
     Default: 110<br>
-    <code>attr myTTS TTS_VolumeAdjust 400</code><br>
+    <code>attr myTTS TTS_VolumeAdjust 400</code>
   </li>
 
   <li>TTS_noStatisticsLog<br>
     If set to <b>1</b>, it prevents logging statistics to DbLog Devices, default is <b>0</b><br>
-    But please note: This logging is important to be able to delete longer unused cache files. If you disable this, take care to cleanup your cachedirectory by yourself.
+    Note: This logging is important to be able to delete cache files that have not been used for a longer period of time.
+    If you disable this, you will have to clean your cache directory manually.
   </li>
 
   <li>TTS_speakAsFastAsPossible<br>
-      Trying to get a speech as fast as possible. In case of not present audio bricks, you can hear a short break as the audio brick will be downloaded at this time. In case of a presentation of all audio bricks at local cache,
-      this attribute has no impact.<br>
+      Trying to get a speech as fast as possible. In case of not present audio bricks, you can
+      hear a short break as the audio brick will be downloaded at this time.
+      In case of a presentation of all audio bricks at local cache, this attribute has no impact.<br>
       Attribute is only valid on local or server instances.
   </li>
 
@@ -1522,14 +1523,17 @@ sub Text2Speech_WriteStats($$$$){
     <li>
       <b>Local Device</b><br>
       <ul>
-        Die Ausgabe erfolgt auf angeschlossenen Audiodevices, zb. Lautsprecher direkt am Ger&auml;t oder per
-        Bluetooth-Lautsprecher. Dazu ist Mplayer zu installieren.<br>
+        Die Ausgabe wird an jedes angeschlossene Audiogerät gesendet. Zum Beispiel an einen lokalen Lausprecher oder an
+        entfernte Gerät via Netzwerk, WiFI oder Bluetooth. Die Wiedergabe kann über MPlayer oder jede andere
+        Anwendung erfolgen.<br>
+        <br>
+        Mplayer-Installation unter Debian/Ubuntu/Raspbian:<br>
         <code>apt-get install mplayer</code><br>
         Das angegebene Alsa-Device ist in der <code>/etc/asound.conf</code> zu konfigurieren.
         <p>
           <b>Special AlsaDevice: </b><i>default</i><br>
-          Ist als Alsa-Device <i>default</i> angegeben, so wird mplayer ohne eine Audiodevice Angabe aufgerufen.
-          Dementsprechend verwendet mplayer das Standard-Audio Ausgabedevice.
+          Ist als Alsa-Device <i>default</i> angegeben, so wird Mplayer ohne eine Audiodevice-Angabe aufgerufen.
+          Dementsprechend verwendet Mplayer dann das Standard-Audio Ausgabedevice.
         </p>
         <p>
           <b>Beispiel:</b><br>
@@ -1564,14 +1568,15 @@ sub Text2Speech_WriteStats($$$$){
     <li>
       <b>Server Device</b>
       <ul>
-        Im Falle der Verwendung als Server wird nur die MP3 Datei erstellt und als Reading lastFilename dargestellt. Es ergibt keinen Sinn
-        hier das Attribut <i>TTS_speakAsFastAsPossible</i> zu verwenden. Die Verwendung des Attributes <i>TTS_useMP3Wrap</i> wird dringend empfohlen.
+        Im Falle der Verwendung als Server wird nur die MP3-Datei erstellt und als Reading lastFilename dargestellt.
+        Es ergibt keinen Sinn hier das Attribut <i>TTS_speakAsFastAsPossible</i> zu verwenden.
+        Die Verwendung des Attributes <i>TTS_useMP3Wrap</i> wird dringend empfohlen.
         Ansonsten wird hier nur der letzte Teiltext als mp3 Datei im Reading dargestellt.
       </ul>
       <p>
           <b>Beispiel:</b><br>
           <code>define MyTTS Text2Speech none</code>
-        </p>
+      </p>
     </li>
 
   </ul>
@@ -1622,22 +1627,22 @@ sub Text2Speech_WriteStats($$$$){
     Achtung: Nur bei einem lokal definierter Text2Speech Instanz m&ouml;glich!
     <ul>
       <li>Google<br>
-        Nutzung der Google Sprachengine. Ein Internetzugriff ist notwendig! Aufgrund der Qualit&auml;t ist der
-        Einsatz diese Engine zu empfehlen und der Standard.
+        Google Sprachengine. Vorraussetzung: Aktive Internetverbindung<br>
+        Aufgrund der Qualit&auml;t ist der Einsatz der Engine empfohlen und daher der Standard.
       </li>
       <li>VoiceRSS<br>
-        Nutzung der VoiceRSS Sprachengine. Die Nutzung ist frei bis zu 350 Anfragen pro Tag.
-        Wenn mehr benötigt werden ist ein Bezahlmodell wählbar. Ein Internetzugriff ist notwendig!
-        Aufgrund der Qualit&auml;t ist der Einsatz diese Engine ebenfalls zu empfehlen.
-        Wenn diese Engine benutzt wird, ist ein APIKey notwendig (siehe TTS_APIKey)
+        VoiceRSS Sprachengine. Vorraussetzung: Aktive Internetverbindung<br>
+        Die Nutzung ist frei bis zu 350 Anfragen pro Tag. Wenn mehr benötigt werden, ist ein Bezahlmodell wählbar.
+        Aufgrund der Qualit&auml;t ist der Einsatz dieser Engine ebenfalls empfohlen.
+        Wird diese Engine benutzt, ist ein APIKey notwendig (siehe TTS_APIKey)
       </li>
       <li>ESpeak<br>
-        Nutzung der ESpeak Offline Sprachengine. Die Qualit&auml; ist schlechter als die Google Engine.
-        ESpeak und lame sind vor der Nutzung zu installieren.<br>
-        <code>apt-get install espeak lame</code>
+        ESpeak Sprachengine. Vorraussetzung: Installation von Espeak and lame<br>
+        eSpeak ist ein Open-Source-Software-Sprachsynthesizer für Englisch und andere Sprachen.
+        Die Qualit&auml; ist schlechter als die der Google Engine<br>
       </li>
       <li>SVOX-pico<br>
-        Nutzung der SVOX-Pico TTS-Engine (aus dem AOSP).<br>
+        SVOX-Pico TTS-Engine (aus dem AOSP). Vorraussetzung: Installation von SVOX-Pico and lame<br>
         Die Sprachengine sowie <code>lame</code> müssen installiert sein:<br>
         <code>sudo apt-get install libttspico-utils lame</code><br><br>
         Für ARM/Raspbian sind die <code>libttspico-utils</code> leider nicht verfügbar,<br>
@@ -1648,8 +1653,8 @@ sub Text2Speech_WriteStats($$$$){
         <code>sudo dpkg --install pico2wave.deb</code>
       </li>
       <li>Amazon-Polly<br>
-       Nutzung der Amazon Polly Sprachengine, dieselbe Engine wie für Amazon Alexa verwendet wird.<br>
-       Es muss das Perl Package Paws installiert sowie ein AWS Konto und ein Polly AWS User verfügbar sein<br>
+       Amazon Polly Sprachengine. Vorraussetzung: Aktive Internetverbindung und Perl Package Paws<br>
+       Amazon-Dienst, der Text in lebensechte Sprache umwandelt. Ein AWS Konto und ein Polly AWS User müssen verfügbar sein<br>
        <code>cpan paws</code><br>
        Die Zugangsdaten zum eigenen AWS Konto müssen unter ~/.aws/credentials liegen. <br>
        <code>[default]
@@ -1665,7 +1670,7 @@ sub Text2Speech_WriteStats($$$$){
   </li>
 
   <li>TTS_Language_Custom<br>
-    Möchte man eine Spreche und Stimme abweichend der Standardsprachen verwenden, so kann man diese hier eintragen. <br>
+    Möchte man eine Sprache und Stimme abweichend der Standardsprachen verwenden, so kann man diese hier eintragen. <br>
     Die Definition ist abhängig der verwendeten Sprachengine. Dieses Attribut überschreibt ein ev. vorhandenes TTS_Langugae Attribut.<br>
     Siehe in die jeweilige API Referenz
   </li>
@@ -1684,7 +1689,7 @@ sub Text2Speech_WriteStats($$$$){
     Optional: Die per Google geladenen Sprachbausteine werden in diesem Verzeichnis zur Wiederverwendung abgelegt.
     Es findet zurzeit keine automatisierte L&ouml;schung statt.<br>
     Default: <i>cache/</i><br>
-    Achtung: Nur bei einem lokal definierter Text2Speech Instanz m&ouml;glich!
+    Achtung: Nur bei einer lokal definierten Text2Speech-Instanz m&ouml;glich!
   </li>
 
   <li>TTS_UseMP3Wrap<br>
@@ -1692,25 +1697,25 @@ sub Text2Speech_WriteStats($$$$){
     geladenen Sprachbausteine zu einem einzelnen Sprachbaustein zusammenfassen zu lassen bevor dieses per
     Mplayer ausgegeben werden. Dazu muss Mp3Wrap installiert werden.<br>
     <code>apt-get install mp3wrap</code><br>
-    Achtung: Nur bei einem lokal definierter Text2Speech Instanz m&ouml;glich!
+    Achtung: Nur bei einer lokal definierten Text2Speech-Instanz m&ouml;glich!
   </li>
 
   <li>TTS_MplayerCall<br>
-    Optional: Angabe des Systemaufrufs zu Mplayer oder eines anderen Tools. Wird ein anderes Tool als Mplayer<br>
-    dort verwendet gelten folgende Templates: <br>
+    Optional: Angabe des Systemaufrufs für einen alternativen Player. Wird ein der Aufrif gesetzt,<br>
+    können folgende Templates genutzt werden: <br>
     <ul>
         <li>{device}</li>
         <li>{volume}</li>
         <li>{volumeadjust}</li>
         <li>{file}</li>
     </ul>
-    {options} werden als Text in Klammern beim Aufruf von set gesetzt, um beispielsweise spezielle Parameter für jeden Aufruf
-    separat zu setzen<br>
+    {options} werden als Text in Klammern bei der Ausführung von set gesetzt, um beispielsweise spezielle
+    Parameter für jeden Aufruf separat zu setzen<br>
     Beispiel: <code>set myTTS tts [192.168.0.1:7000] Das ist mein Text</code><br><br>
 
-     Beispiele:<br>
-     <code>attr myTTS TTS_MplayerCall sudo /usr/bin/mplayer</code><br>
-     <code>attr myTTS TTS_MplayerCall AUDIODEV={device} play -q -v {volume} {file}</code><br>
+    Beispiel der Definition:<br>
+    <code>attr myTTS TTS_MplayerCall sudo /usr/bin/mplayer</code><br>
+    <code>attr myTTS TTS_MplayerCall AUDIODEV={device} play -q -v {volume} {file}</code><br>
     <code>attr myTTS TTS_MplayerCall player {file} {options}</code><br>
 </li>
 
@@ -1743,21 +1748,21 @@ sub Text2Speech_WriteStats($$$$){
   </li>
 
   <li>TTS_noStatisticsLog<br>
-  <b>1</b>, verhindert das Loggen von Statistikdaten in DbLog Geräten. Default ist <b>0</b><br>
-  Bitte zur Beachtung: Das Logging ist wichtig um alte, lang nicht genutzte Cachedateien automatisiert zu l&ouml;schen.
-  Wenn dieses hier deaktiviert wird, muss sich der User selbst darum k&uuml;ümmern.
+  <b>1</b>, verhindert das Loggen von Statistikdaten in DbLog Ger&auml;ten. Default ist <b>0</b><br>
+  Hinweis: Das Logging ist wichtig um alte, lang nicht genutzte Cachedateien automatisiert zu l&ouml;schen.
+  Wird die Option hier aktiviert, muss sich der Nutzer selbst darum k&uuml;ümmern.
   </li>
 
   <li>TTS_speakAsFastAsPossible<br>
-    Es wird versucht, so schnell als möglich eine Sprachausgabe zu erzielen. Bei Sprachbausteinen die nicht bereits lokal vorliegen,
-    ist eine kurze Pause wahrnehmbar. Dann wird der benötigte Sprachbaustein nachgeladen. Liegen alle Sprachbausteine im Cache vor,
-    so hat dieses Attribut keine Auswirkung.<br>
+    Es wird versucht, so schnell als möglich eine Sprachausgabe zu erzielen. Bei Sprachbausteinen
+    die nicht bereits lokal vorliegen, ist eine kurze Pause wahrnehmbar. Dann wird der benötigte
+    Sprachbaustein nachgeladen. Liegen alle Sprachbausteine im Cache vor, so hat dieses Attribut keine Auswirkung.<br>
     Attribut nur verfügbar bei einer lokalen oder Server Instanz
   </li>
 
   <li>TTS_OutputFile<br>
       Angabe eines fixen Dateinamens als mp3 Output. Das Attribut ist nur relevant in Verbindung mit TTS_UseMP3Wrap.<br>
-      Wenn ein Dateiname angegeben wird, so wird zusätzlich TTS_CacheFileDir beachtet. Bei einer absoluten Pfadangabe <br>
+      Wenn ein Dateiname angegeben wird, so wird zusätzlich TTS_CacheFileDir beachtet. Bei einer absoluten Pfadangabe
       muss der Dateipfad durch FHEM schreibbar sein.<br>
       <code>attr myTTS TTS_OutputFile output.mp3</code><br>
       <code>attr myTTS TTS_OutputFile /media/miniDLNA/output.mp3</code><br>
