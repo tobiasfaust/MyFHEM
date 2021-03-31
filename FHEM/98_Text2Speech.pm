@@ -1523,8 +1523,8 @@ sub Text2Speech_WriteStats($$$$){
     <li>
       <b>Local Device</b><br>
       <ul>
-        Die Ausgabe wird an jedes angeschlossene Audiogerät gesendet. Zum Beispiel an einen lokalen Lausprecher oder an
-        entfernte Gerät via Netzwerk, WiFI oder Bluetooth. Die Wiedergabe kann über MPlayer oder jede andere
+        Die Ausgabe wird an jedes angeschlossene Audiogerät gesendet. Zum Beispiel an einen lokalen Lautsprecher oder an
+        entfernte Geräte via Netzwerk, WiFI oder Bluetooth. Die Wiedergabe kann über MPlayer oder jede andere
         Anwendung erfolgen.<br>
         <br>
         Mplayer-Installation unter Debian/Ubuntu/Raspbian:<br>
@@ -1570,7 +1570,7 @@ sub Text2Speech_WriteStats($$$$){
       <ul>
         Im Falle der Verwendung als Server wird nur die MP3-Datei erstellt und als Reading lastFilename dargestellt.
         Es ergibt keinen Sinn hier das Attribut <i>TTS_speakAsFastAsPossible</i> zu verwenden.
-        Die Verwendung des Attributes <i>TTS_useMP3Wrap</i> wird dringend empfohlen.
+        Die Verwendung des Attributs <i>TTS_useMP3Wrap</i> wird dringend empfohlen.
         Ansonsten wird hier nur der letzte Teiltext als mp3 Datei im Reading dargestellt.
       </ul>
       <p>
@@ -1613,7 +1613,7 @@ sub Text2Speech_WriteStats($$$$){
     Achtung: Nur bei einem lokal definierter Text2Speech Instanz m&ouml;glich!<br>
     <b>Notation</b><br>
        + -> erzwinge das Trennen, auch wenn Textbaustein < x Zeichen<br>
-       - -> Trenne nur wenn Textbaustein > x Zeichen
+       - -> trenne, nur wenn Textbaustein > x Zeichen
       af -> add first -> füge den Delimiter am Satzanfang wieder hinzu<br>
       al -> add last  -> füge den Delimiter am Satzende wieder hinzu<br>
       an -> add nothing -> Delimiter nicht wieder hinzufügen<br>
@@ -1627,22 +1627,22 @@ sub Text2Speech_WriteStats($$$$){
     Achtung: Nur bei einem lokal definierter Text2Speech Instanz m&ouml;glich!
     <ul>
       <li>Google<br>
-        Google Sprachengine. Vorraussetzung: Aktive Internetverbindung<br>
+        Google Sprachengine. Voraussetzung: Aktive Internetverbindung<br>
         Aufgrund der Qualit&auml;t ist der Einsatz der Engine empfohlen und daher der Standard.
       </li>
       <li>VoiceRSS<br>
-        VoiceRSS Sprachengine. Vorraussetzung: Aktive Internetverbindung<br>
+        VoiceRSS Sprachengine. Voraussetzung: Aktive Internetverbindung<br>
         Die Nutzung ist frei bis zu 350 Anfragen pro Tag. Wenn mehr benötigt werden, ist ein Bezahlmodell wählbar.
         Aufgrund der Qualit&auml;t ist der Einsatz dieser Engine ebenfalls empfohlen.
         Wird diese Engine benutzt, ist ein APIKey notwendig (siehe TTS_APIKey)
       </li>
       <li>ESpeak<br>
-        ESpeak Sprachengine. Vorraussetzung: Installation von Espeak and lame<br>
+        ESpeak Sprachengine. Voraussetzung: Installation von Espeak und lame<br>
         eSpeak ist ein Open-Source-Software-Sprachsynthesizer für Englisch und andere Sprachen.
         Die Qualit&auml; ist schlechter als die der Google Engine<br>
       </li>
       <li>SVOX-pico<br>
-        SVOX-Pico TTS-Engine (aus dem AOSP). Vorraussetzung: Installation von SVOX-Pico and lame<br>
+        SVOX-Pico TTS-Engine (aus dem AOSP). Voraussetzung: Installation von SVOX-Pico and lame<br>
         Die Sprachengine sowie <code>lame</code> müssen installiert sein:<br>
         <code>sudo apt-get install libttspico-utils lame</code><br><br>
         Für ARM/Raspbian sind die <code>libttspico-utils</code> leider nicht verfügbar,<br>
@@ -1653,7 +1653,7 @@ sub Text2Speech_WriteStats($$$$){
         <code>sudo dpkg --install pico2wave.deb</code>
       </li>
       <li>Amazon-Polly<br>
-       Amazon Polly Sprachengine. Vorraussetzung: Aktive Internetverbindung und Perl Package Paws<br>
+       Amazon Polly Sprachengine. Voraussetzung: Aktive Internetverbindung und Perl Package Paws<br>
        Amazon-Dienst, der Text in lebensechte Sprache umwandelt. Ein AWS Konto und ein Polly AWS User müssen verfügbar sein<br>
        <code>cpan paws</code><br>
        Die Zugangsdaten zum eigenen AWS Konto müssen unter ~/.aws/credentials liegen. <br>
@@ -1666,7 +1666,7 @@ sub Text2Speech_WriteStats($$$$){
   </li>
 
   <li>TTS_Language<br>
-    Auswahl verschiendener Standardsprachen.
+    Auswahl verschiedener Standardsprachen.
   </li>
 
   <li>TTS_Language_Custom<br>
@@ -1701,13 +1701,14 @@ sub Text2Speech_WriteStats($$$$){
   </li>
 
   <li>TTS_MplayerCall<br>
-    Optional: Angabe des Systemaufrufs für einen alternativen Player. Wird ein der Aufrif gesetzt,<br>
+    Optional: Angabe des Systemaufrufs für einen alternativen Player. Wird der Aufruf gesetzt,<br>
     können folgende Templates genutzt werden: <br>
     <ul>
         <li>{device}</li>
         <li>{volume}</li>
         <li>{volumeadjust}</li>
         <li>{file}</li>
+        <li>{options}</li>
     </ul>
     {options} werden als Text in Klammern bei der Ausführung von set gesetzt, um beispielsweise spezielle
     Parameter für jeden Aufruf separat zu setzen<br>
@@ -1717,7 +1718,7 @@ sub Text2Speech_WriteStats($$$$){
     <code>attr myTTS TTS_MplayerCall sudo /usr/bin/mplayer</code><br>
     <code>attr myTTS TTS_MplayerCall AUDIODEV={device} play -q -v {volume} {file}</code><br>
     <code>attr myTTS TTS_MplayerCall player {file} {options}</code><br>
-</li>
+  </li>
 
   <li>TTS_SentenceAppendix<br>
     Optional: Angabe einer mp3-Datei die mit jeder Sprachausgabe am Ende ausgegeben wird.<br>
