@@ -1223,8 +1223,12 @@ sub Text2Speech_WriteStats($$$$){
 
 =pod
 =item helper
-=item summary    A module that converts text to speech and also plays the result on a local or remote loudspeaker
-=item summary_DE Modul, das Text in Sprache umwandelt und das Ergebnis über einen lokalen oder entfernten Lautsprecher wiedergibt
+=item summary    A module that converts text to speech \
+and also plays the result on a local or remote loudspeaker
+
+=item summary_DE Modul, das Text in Sprache umwandelt \
+und das Ergebnis über einen lokalen oder entfernten Lautsprecher wiedergibt
+
 =begin html
 
 <a name="Text2Speech"></a>
