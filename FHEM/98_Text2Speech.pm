@@ -67,7 +67,7 @@ my %ttsSpeed        = ("Google"     => "",
 my %ttsQuality       = ("Google"     => "",
                        "VoiceRSS"   => "f="
                        );
-my %ttsMaxChar      = ("Google"     => 150,
+my %ttsMaxChar      = ("Google"     => 200,
                        "VoiceRSS"   => 300,
                        "SVOX-pico"  => 1000,
                        "Amazon-Polly" => 3000
@@ -869,7 +869,7 @@ sub Text2Speech_Download($$$) {
     my $HttpResponseErr;
     my $fh;
 
-    my $url  = "http://" . $ttsHost{$TTS_Ressource} . $ttsPath{$TTS_Ressource};
+    my $url  = "https://" . $ttsHost{$TTS_Ressource} . $ttsPath{$TTS_Ressource};
        $url .= $ttsLang{$TTS_Ressource} . $TTS_Language;
        $url .= "&" . $ttsAddon{$TTS_Ressource}              if(length($ttsAddon{$TTS_Ressource})>0);
        $url .= "&" . $ttsUser{$TTS_Ressource} . $TTS_User     if(length($ttsUser{$TTS_Ressource})>0);
