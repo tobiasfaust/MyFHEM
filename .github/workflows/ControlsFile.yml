@@ -28,7 +28,7 @@ jobs:
       - name: update controls files
         uses: fhem/fhem-controls-actions@v2.00b
         with:
-          filename: controls.txt 
+          filename: controls_tobiasfaust.txt 
 
       - name: Commit files
         run: |
