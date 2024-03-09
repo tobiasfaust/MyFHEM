@@ -1,6 +1,6 @@
 
 ##############################################
-# $Id: 98_Text2Speech.pm 24138 2021-04-03 09:52:38Z Tobias.Faust $
+# $Id: 98_Text2Speech.pm 25785 2022-03-06 10:00:56Z Tobias.Faust $
 #
 # 98_Text2Speech.pm
 #
@@ -116,6 +116,7 @@ sub Text2Speech_Initialize($)
   $hash->{DefFn}     = "Text2Speech_Define";
   $hash->{SetFn}     = "Text2Speech_Set";
   $hash->{UndefFn}   = "Text2Speech_Undefine";
+  $hash->{RenameFn}  = "Text2Speech_Rename";
   $hash->{AttrFn}    = "Text2Speech_Attr";
   $hash->{AttrList}  = "disable:0,1".
                        " TTS_Delimiter".
@@ -166,6 +167,7 @@ sub Text2Speech_Initialize($)
                        " TTS_SpeakAsFastAsPossible:1,0".
                        " TTS_OutputFile".
                        " TTS_AWS_HomeDir".
+                       " TTS_RemotePlayerCall".
                        " ".$readingFnAttributes;
 }
 
@@ -227,6 +229,7 @@ sub Text2Speech_Define($$)
   if ($ret) {
     Log3 $hash->{NAME}, 3, $ret;
   }
+  Text2Speech_AddExtension( $hash->{NAME}, \&Text2Speech_getLastMp3, "$hash->{TYPE}/$hash->{NAME}/last.mp3" );
   return undef;
 }
 
@@ -296,9 +299,18 @@ sub Text2Speech_Undefine($$)
 
  RemoveInternalTimer($hash);
  BlockingKill($hash->{helper}{RUNNING_PID}) if(defined($hash->{helper}{RUNNING_PID}));
+ Text2Speech_RemoveExtension( "$hash->{TYPE}/$hash->{NAME}/last.mp3" );
  Text2Speech_CloseDev($hash);
 
  return undef;
+}
+
+sub Text2Speech_Rename(@) {
+  my ( $newname, $oldname ) = @_;
+  my $hash = $defs{$newname};
+  my $type = $hash->{TYPE};
+  Text2Speech_RemoveExtension( "$type/$oldname/last.mp3" );
+  Text2Speech_AddExtension( $newname, \&Text2Speech_getLastMp3, "$type/$newname/last.mp3" );
 }
 
 sub Text2Speech_Attr(@) {
@@ -373,6 +385,12 @@ sub Text2Speech_Attr(@) {
       if($TTS_FileTemplateDir =~ m/^\/.*/) { $newDir = $TTS_FileTemplateDir; } else { $newDir = $TTS_CacheFileDir ."/". $TTS_FileTemplateDir;}
       return "file does not exist: <".$newDir ."/". $FileTplPc[1] .">"
         unless (-e $newDir ."/". $FileTplPc[1]);
+    }
+  } elsif ($a[0] eq "set" && $a[2] eq "TTS_RemotePlayerCall") {
+    if( $init_done ) {
+      eval $value ;
+      return "Text2Speach_Attr evaluating TTS_RemotePlayerCall error: $@" if ( $@ );
+    
     }
   }
 
@@ -1167,9 +1185,13 @@ sub Text2Speech_Done($) {
 
     $hash->{helper}{RUNNING_PID} = BlockingCall("Text2Speech_DoIt", $hash, "Text2Speech_Done", $TTS_TimeOut, "Text2Speech_AbortFn", $hash);
   } else {
+
+    my $playercall = AttrVal( $hash->{NAME}, 'TTS_RemotePlayerCall', '' );
+    eval $playercall if( $playercall );
+    Log3( $hash, 1, $hash->{NAME}." TTS_RemotePlayerCall: eval error $@.") if( $@ );
+
     # alles wurde bearbeitet
     Log3($hash,4, $hash->{NAME}.": Es wurden alle Teile ausgegeben und der Befehl ist abgearbeitet.");
-
     readingsSingleUpdate($hash, "playing", "0", 1);
   }
 }
@@ -1223,6 +1245,89 @@ sub Text2Speech_WriteStats($$$$){
   }
   DbLog_ExecSQL($defs{$DbLogDev}, $cmd);
 }
+
+#########################
+sub Text2Speech_readMp3(@) {
+  my ($hash) = @_;
+  my $name = $hash->{NAME};
+  my $type = $hash->{TYPE};
+  my $iam = "$type $name Text2Speech_readMp3:";
+  my $filename = ReadingsVal( $name, 'lastFilename', '' );
+
+  if ( $filename and -e $filename ) {
+    if( open my $fh, '<:raw', $filename ) {
+      my $content;
+
+      while (1) {
+        my $success = read $fh, $content, 1024, length( $content );
+        if( not defined $success ) {
+          close $fh;
+          Log3 $name, 1, "$iam read file \"$filename\" error: $!.";
+          return undef;
+        }
+
+        last if not $success;
+      }
+
+      close $fh;
+      Log3 $name, 4, "$iam file \"$filename\" content length: ".length( $content );
+      return \$content;
+
+    } else {
+      Log3 $name, 1, "$iam open file \"$filename\" error: $!.";
+    }
+
+  } else {
+    Log3 $name, 2, "$iam file \"$filename\" does not exist.";
+  }
+  return undef;
+}
+
+#########################
+sub Text2Speech_getLastMp3 {
+  my ($request) = @_;
+
+  if ( $request =~ /^\/(Text2Speech)\/(\w+)\/last.mp3/ ) {
+
+    my $type   = $1;
+    my $name   = $2;
+    my $hash = $defs{$name};
+    my $audioData = Text2Speech_readMp3( $hash );
+    return ( "text/plain; charset=utf-8","${type} ${name}: No MP3 file for webhook $request" ) if ( !$audioData );
+    my $audioMime = 'audio/mpeg';
+    
+    return ( $audioMime, $$audioData );
+  }
+  return ( "text/plain; charset=utf-8", "No Text2Speech device for webhook $request" );
+}
+
+#########################
+sub Text2Speech_AddExtension(@) {
+    my ( $name, $func, $link ) = @_;
+    my $hash = $defs{$name};
+    my $type = $hash->{TYPE};
+
+    my $url = "/$link";
+    Log3( $name, 2, "Registering $type $name for URL $url..." );
+    $::data{FWEXT}{$url}{deviceName} = $name;
+    $::data{FWEXT}{$url}{FUNC}       = $func;
+    $::data{FWEXT}{$url}{LINK}       = $link;
+
+    return;
+}
+
+#########################
+sub Text2SpeechRemoveExtension(@) {
+    my ($link) = @_;
+    my $url  = "/$link";
+    my $name = $::data{FWEXT}{$url}{deviceName};
+
+    Log3( $name, 2, "Unregistering URL $url..." );
+    delete $::data{FWEXT}{$url};
+
+    return;
+}
+
 
 1;
 
@@ -1478,6 +1583,13 @@ the result on a local or remote loudspeaker
       If a file name is specified, then TTS_CacheFileDir is also taken into account.<br>
       <code>attr myTTS TTS_OutputFile output.mp3</code><br>
       <code>attr myTTS TTS_OutputFile /media/miniDLNA/output.mp3</code><br>
+  </li>
+
+  <li>TTS_RemotePlayerCall<br>
+      The Text2Speech devices provide a URL to the last generated mp3 file:<b>
+      <code>http(s)://&lt;fhem server ip&gt;:&lt;fhem port&gt;/fhem/Text2Speech/&lt;device name&gt;/last.mp3.</code><br>
+      If this attibute contains a remote player call, it will be executed after the last mp3 file is generated.<br>
+      <code>attr &lt;device name&gt; TTS_RemotePlayerCall GetFileFromURL('http(s)://&lt;remote player&gt;:&lt;remote port&gt;/?cmd=playSound&url=http(s)://&lt;fhem server ip&gt;:&lt;fhem port&gt;/fhem/Text2Speech/&lt;device name&gt;/last.mp3&loop=false&password=&lt;password&gt;')</code><br>
   </li>
 
   <li><a href="#readingFnAttributes">readingFnAttributes</a></li><br>
@@ -1775,6 +1887,14 @@ the result on a local or remote loudspeaker
       muss der Dateipfad durch FHEM schreibbar sein.<br>
       <code>attr myTTS TTS_OutputFile output.mp3</code><br>
       <code>attr myTTS TTS_OutputFile /media/miniDLNA/output.mp3</code><br>
+  </li>
+
+  <li>TTS_RemotePlayerCall<br>
+      Die Text2Speech Geräte stellen eine URL bereit, die auf die letzte erzeugte mp3 Datei zeigt:<br>
+      <code>http(s)://&lt;fhem server ip&gt;:&lt;fhem port&gt;/fhem/Text2Speech/&lt;device name&gt;/last.mp3</code><br>
+      Wenn dieses Attribut den Aufruf eines Remoteplayers enthält, wird er nach dem Erzeugen der letzten mp3 Datei ausgeführt.<br>
+      Beispiel zum Abspielen einer Datei auf einem Smartphone oder Tablet mit Fully Kiosk Browser App.<br>
+      <code>attr &lt;device name&gt; TTS_RemotePlayerCall GetFileFromURL('http(s)://&lt;remote player&gt;:2323/?cmd=playSound&url=http(s)://&lt;fhem server ip&gt;:&lt;fhem port&gt;/fhem/Text2Speech/&lt;device name&gt;/last.mp3&loop=false&password=&lt;password&gt;')</code><br>
   </li>
 
   <li><a href="#readingFnAttributes">readingFnAttributes</a>
