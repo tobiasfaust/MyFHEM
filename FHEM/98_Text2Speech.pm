@@ -56,7 +56,8 @@ my %ttsAddon        = ("Google"     => "client=tw-ob&ie=UTF-8",
                        "VoiceRSS"   => ""
                        );
 my %ttsAPIKey       = ("Google"     => "", # kein APIKey nötig
-                       "VoiceRSS"   => "key="
+                       "VoiceRSS"   => "key=",
+                       "maryTTS"    => ''
                        );
 my %ttsUser         = ("Google"     => "", # kein Username nötig
                        "VoiceRSS"   => ""  # kein Username nötig
@@ -70,7 +71,8 @@ my %ttsQuality       = ("Google"     => "",
 my %ttsMaxChar      = ("Google"     => 200,
                        "VoiceRSS"   => 300,
                        "SVOX-pico"  => 1000,
-                       "Amazon-Polly" => 3000
+                       "Amazon-Polly" => 3000,
+                       "maryTTS"    => 3000
                        );
 my %language        = ("Google"     =>  { "Deutsch"       => "de",
                                           "English-US"    => "en-us",
@@ -120,7 +122,7 @@ sub Text2Speech_Initialize($)
   $hash->{AttrFn}    = "Text2Speech_Attr";
   $hash->{AttrList}  = "disable:0,1".
                        " TTS_Delimiter".
-                       " TTS_Ressource:ESpeak,SVOX-pico,Amazon-Polly,". join(",", sort keys %ttsHost).
+                       " TTS_Ressource:ESpeak,SVOX-pico,Amazon-Polly,maryTTS,". join(",", sort keys %ttsHost).
                        " TTS_APIKey".
                        " TTS_User".
                        " TTS_Quality:".
@@ -524,7 +526,7 @@ sub Text2Speech_Set($@)
   return "no set argument specified" if(int(@a) < 2);
 
   return "No APIKey specified"                  if (!defined($TTS_APIKey) && ($ttsAPIKey{$TTS_Ressource} || length($ttsAPIKey{$TTS_Ressource})>0));
-  return "No Username for TTS Access specified" if (!defined($TTS_User) && ($ttsUser{$TTS_Ressource} || length($ttsUser{$TTS_Ressource})>0));
+  return "No Username for TTS Access specified" if ( $TTS_Ressource ne 'maryTTS' && !defined($TTS_User) && ($ttsUser{$TTS_Ressource} || length($ttsUser{$TTS_Ressource})>0));
 
   my $ret = Text2Speech_loadmodules($hash, $TTS_Ressource);
   if ($ret) {
@@ -977,6 +979,45 @@ sub Text2Speech_Download($$$) {
     $fh->print($res->AudioStream);
     Log3 $hash->{NAME}, 4, $hash->{NAME}.": Schreibe mp3 in die Datei $file mit ". $res->RequestCharacters ." Chars";
     close($fh);
+  } else  if ( $TTS_Ressource eq 'maryTTS' ) {
+    my $mTTSurl  = $TTS_User;
+    my($unnamed, $named) = parseParams($mTTSurl);
+    $named->{host}     //= shift @{$unnamed} // '127.0.0.1';
+    $named->{port}     //= shift @{$unnamed} // '59125';
+    $named->{lang}     //= shift @{$unnamed} // !$TTS_Language || $TTS_Language eq 'Deutsch' ? 'de_DE' : $TTS_Language;
+    $named->{voice}    //= shift @{$unnamed} // 'de_DE/thorsten_low';
+    $named->{endpoint} //= shift @{$unnamed} // 'process';
+
+    $mTTSurl = "http://$named->{host}:$named->{port}/$named->{endpoint}?INPUT_TYPE=TEXT&OUTPUT_TYPE=AUDIO&AUDIO=WAVE_FILE&LOCALE=$named->{lang}&VOICE=$named->{voice}&INPUT_TEXT="; # https://github.com/marytts/marytts-txt2wav/blob/python/txt2wav.py#L21
+    $mTTSurl .= uri_escape($text);
+
+    Log3( $hash->{NAME}, 4, "$hash->{NAME}: Hole URL: $mTTSurl" );
+    my $param = {     url         => $mTTSurl,
+                      timeout     => 5,
+                      hash        => $hash,     # Muss gesetzt werden, damit die Callback funktion wieder $hash hat
+                      method      => 'GET'      # POST can be found in https://github.com/marytts/marytts-txt2wav/blob/python/txt2wav.py#L33
+                  };
+    my ($maryTTSResponseErr, $maryTTSResponse) = HttpUtils_BlockingGet($param);
+
+    if(length($maryTTSResponseErr) > 0) {
+      Log3($hash->{NAME}, 3, "$hash->{NAME}: Fehler beim Abrufen der Daten von $TTS_Ressource: $maryTTSResponseErr");
+      return;
+    }
+
+    my $FileWav2 = $file . '.wav';
+    my $fh2 = new IO::File ">$FileWav2";
+    if ( !defined $FileWav2 ) {
+      Log3($hash->{NAME}, 2, "$hash->{NAME}: wav Datei <$FileWav2> konnte nicht angelegt werden.");
+      return;
+    }
+
+    $fh2->print($maryTTSResponse);
+    Log3($hash->{NAME}, 4, "$hash->{NAME}: Schreibe wav in die Datei $FileWav2 mit ".length $maryTTSResponse . ' Bytes');
+    close $fh2;
+    $cmd = qq(lame "$FileWav2" "$file");
+    Log3($hash, 4, "$hash->{NAME}:$cmd");
+    system $cmd;
+    return unlink $FileWav2;
   }
 }
 
@@ -1340,7 +1381,7 @@ the result on a local or remote loudspeaker
 über einen lokalen oder entfernten Lautsprecher wiedergibt
 =begin html
 
-<a name="Text2Speech"></a>
+<a id="Text2Speech"></a>
 <h3>Text2Speech</h3>
 <ul>
   <br>
@@ -1625,7 +1666,7 @@ the result on a local or remote loudspeaker
 =end html
 =begin html_DE
 
-<a name="Text2Speech"></a>
+<a id="Text2Speech"></a>
 <h3>Text2Speech</h3>
 <ul>
   <br>
