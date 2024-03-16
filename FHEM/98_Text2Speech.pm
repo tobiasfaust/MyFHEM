@@ -1677,7 +1677,16 @@ the result on a local or remote loudspeaker
   <code>define MyTTS Text2Speech hw=0.0</code><br>
   <code>set MyTTS tts The alarm system is ready.</code><br>
   <code>set MyTTS tts :beep.mp3:</code><br>
-  <code>set MyTTS tts :mytemplates/alarm.mp3:The alarm system is ready.:ring.mp3:</code><br>
+  <code>set MyTTS tts :mytemplates/alarm.mp3:The alarm system is ready.:ring.mp3:</code>
+  <br>
+  Example of MaryTTS and using SSML: <br>
+  <code>
+    define T2S Text2Speech default
+    attr T2S TTS_MplayerCall /usr/bin/mplayer
+    attr T2S TTS_Ressource maryTTS
+    attr T2S TTS_User host=192.168.100.1 port=59125 lang=de_DE voice=de_DE/thorsten_low ssml=1
+    set T2S tts '&lt;voice name="de_DE/m-ailabs_low#rebecca_braunert_plunkett"&gt;Das ist ein Test in deutsch &lt;/voice&gt;&lt;voice name="en_US/vctk_low#p236"&gt;and this is an test in english.&lt;/voice&gt;'
+  </code>
 </ul>
 
 =end html
@@ -1990,9 +1999,17 @@ the result on a local or remote loudspeaker
   <code>define MyTTS Text2Speech hw=0.0</code><br>
   <code>set MyTTS tts Die Alarmanlage ist bereit.</code><br>
   <code>set MyTTS tts :beep.mp3:</code><br>
-  <code>set MyTTS tts :mytemplates/alarm.mp3:Die Alarmanlage ist bereit.:ring.mp3:</code><br>
+  <code>set MyTTS tts :mytemplates/alarm.mp3:Die Alarmanlage ist bereit.:ring.mp3:</code>
+  <br>
+  Beispiel MaryTTS und SSML: <br>
+  <code>
+    define T2S Text2Speech default
+    attr T2S TTS_MplayerCall /usr/bin/mplayer
+    attr T2S TTS_Ressource maryTTS
+    attr T2S TTS_User host=192.168.100.1 port=59125 lang=de_DE voice=de_DE/thorsten_low ssml=1
+    set T2S tts '&lt;voice name="de_DE/m-ailabs_low#rebecca_braunert_plunkett"&gt;Das ist ein Test in deutsch &lt;/voice&gt;&lt;voice name="en_US/vctk_low#p236"&gt;and this is an test in english.&lt;/voice&gt;'
+  </code>
 </ul>
-
 
 =end html_DE
 =cut
