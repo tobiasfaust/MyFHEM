@@ -1130,15 +1130,21 @@ sub Text2Speech_DoIt($) {
 
       my $t = substr($Mp3WrapFile, 0, length($Mp3WrapFile)-4)."_MP3WRAP.mp3";
       if(-e $t){
+
         Log3 $hash->{NAME}, 4, $hash->{NAME}.": Benenne Datei um von <".$t."> nach <".$Mp3WrapFile.">";
         rename($t, $Mp3WrapFile);
         #falls die Datei existiert den ID3V1 und ID3V2 Tag entfernen
-        eval{
-          remove_mp3tag($Mp3WrapFile, 2);
-          remove_mp3tag($Mp3WrapFile, 1);
-          Log3 $hash, 4, $hash->{NAME}.": Die ID3 Tags von $Mp3WrapFile wurden geloescht";
-        } or Log3 $hash->{NAME}, 3, "MP3::Info Modul fehlt, konnte MP3 Tags nicht entfernen";
-      } else {Log3 $hash->{NAME}, 3, $hash->{NAME}.": MP3WRAP Fehler!, Datei wurde nicht generiert.";}
+        my $ret = eval{ remove_mp3tag( $Mp3WrapFile, 'ALL' ) };
+        Log3 $hash, 1, $hash->{NAME}.": Fehle beim entfernen der ID3 Tags: $@" if ( $@ );
+        Log3 $hash, 4, $hash->{NAME}.": Die ID3 Tags ( $ret Bytes ) von $Mp3WrapFile wurden geloescht." if ( $ret > 0 );
+        Log3 $hash, 4, $hash->{NAME}.": Die ID3 Tags ( 0 Bytes ) von $Mp3WrapFile wurden geloescht." if ( $ret == -1 );
+        Log3 $hash->{NAME}, 3, "MP3::Info Modul fehlt, konnte MP3 Tags nicht entfernen!" if ( !$ret );
+
+      } else {
+
+        Log3 $hash->{NAME}, 3, $hash->{NAME}.": MP3WRAP Fehler!, Datei wurde nicht generiert.";
+
+      }
     }
 
     if ($TTS_OutputFile && $TTS_OutputFile ne $Mp3WrapFile) {
@@ -1183,7 +1189,6 @@ sub Text2Speech_DoIt($) {
     Log3 $hash->{NAME}, 4, $hash->{NAME}.":" .$cmd;
     system($cmd);
   }
-
   return $hash->{NAME}. "|".
          "1" ."|".
          $file;
@@ -1213,7 +1218,16 @@ sub Text2Speech_Done($) {
     }
     Text2Speech_WriteStats($hash, 1, $filename, join(" ", @text)) if (AttrVal($hash->{NAME},"TTS_noStatisticsLog", "0")==0);
 
-    readingsSingleUpdate($hash, "lastFilename", $filename, 1);
+    readingsBeginUpdate( $hash );
+      readingsBulkUpdate($hash, 'lastFilename', $filename );
+      # Update der Dauer im Servermode
+      readingsBulkUpdate( $hash, 'duration', Text2Speech_CalcMP3Duration( $hash, $filename ) ) if( $hash->{MODE} eq "SERVER" );
+    readingsEndUpdate( $hash, 1 );
+
+    # Aufruf eine eines Abspielgerätes wenn das Attibut gesetzt ist
+    my $playercall = AttrVal( $hash->{NAME}, 'TTS_RemotePlayerCall', '' );
+    eval $playercall if( $playercall );
+    Log3( $hash, 1, $hash->{NAME}." TTS_RemotePlayerCall: eval error $@.") if( $@ );
   }
 
   delete($hash->{helper}{RUNNING_PID});
@@ -1226,10 +1240,6 @@ sub Text2Speech_Done($) {
 
     $hash->{helper}{RUNNING_PID} = BlockingCall("Text2Speech_DoIt", $hash, "Text2Speech_Done", $TTS_TimeOut, "Text2Speech_AbortFn", $hash);
   } else {
-
-    my $playercall = AttrVal( $hash->{NAME}, 'TTS_RemotePlayerCall', '' );
-    eval $playercall if( $playercall );
-    Log3( $hash, 1, $hash->{NAME}." TTS_RemotePlayerCall: eval error $@.") if( $@ );
 
     # alles wurde bearbeitet
     Log3($hash,4, $hash->{NAME}.": Es wurden alle Teile ausgegeben und der Befehl ist abgearbeitet.");
@@ -1296,8 +1306,10 @@ sub Text2Speech_readMp3(@) {
   my $filename = ReadingsVal( $name, 'lastFilename', '' );
 
   if ( $filename and -e $filename ) {
+
     if( open my $fh, '<:raw', $filename ) {
-      my $content;
+
+      my $content = '';
 
       while (1) {
         my $success = read $fh, $content, 1024, length( $content );
@@ -1631,11 +1643,11 @@ the result on a local or remote loudspeaker
       <code>attr myTTS TTS_OutputFile /media/miniDLNA/output.mp3</code><br>
   </li>
 
-  <li>TTS_RemotePlayerCall<br>
+  <a id="Text2Speech-attr-TTS_RemotePlayerCall"></a><li>TTS_RemotePlayerCall<br>
       The Text2Speech devices provide a URL to the last generated mp3 file:<b>
-      <code>http(s)://&lt;fhem server ip&gt;:&lt;fhem port&gt;/fhem/Text2Speech/&lt;device name&gt;/last.mp3.</code><br>
+      <code>&lt;protocol&gt;://&lt;fhem server ip or name&gt;:&lt;fhem port&gt;/fhem/Text2Speech/&lt;device name&gt;/last.mp3.</code><br>
       If this attibute contains a remote player call, it will be executed after the last mp3 file is generated.<br>
-      <code>attr &lt;device name&gt; TTS_RemotePlayerCall GetFileFromURL('http(s)://&lt;remote player&gt;:&lt;remote port&gt;/?cmd=playSound&url=http(s)://&lt;fhem server ip&gt;:&lt;fhem port&gt;/fhem/Text2Speech/&lt;device name&gt;/last.mp3&loop=false&password=&lt;password&gt;')</code><br>
+      <code>attr &lt;device name&gt; TTS_RemotePlayerCall GetFileFromURL('&lt;protocol&gt;://&lt;remote player name or ip&gt;:&lt;remote player port&gt;/?cmd=playSound&url=&lt;protocol&gt;://&lt;fhem server name orip&gt;:&lt;fhem port&gt;/fhem/Text2Speech/&lt;device name&gt;/last.mp3&loop=false&password=&lt;password&gt;')</code><br>
   </li>
 
   <li><a href="#readingFnAttributes">readingFnAttributes</a></li><br>
@@ -1941,12 +1953,12 @@ the result on a local or remote loudspeaker
       <code>attr myTTS TTS_OutputFile /media/miniDLNA/output.mp3</code><br>
   </li>
 
-  <li>TTS_RemotePlayerCall<br>
+  <a id="Text2Speech-attr-TTS_RemotePlayerCall"></a><li>TTS_RemotePlayerCall<br>
       Die Text2Speech Geräte stellen eine URL bereit, die auf die letzte erzeugte mp3 Datei zeigt:<br>
-      <code>http(s)://&lt;fhem server ip&gt;:&lt;fhem port&gt;/fhem/Text2Speech/&lt;device name&gt;/last.mp3</code><br>
+      <code>&lt;protocol&gt;://&lt;fhem server name or ip&gt;:&lt;fhem port&gt;/fhem/Text2Speech/&lt;device name&gt;/last.mp3</code><br>
       Wenn dieses Attribut den Aufruf eines Remoteplayers enthält, wird er nach dem Erzeugen der letzten mp3 Datei ausgeführt.<br>
       Beispiel zum Abspielen einer Datei auf einem Smartphone oder Tablet mit Fully Kiosk Browser App.<br>
-      <code>attr &lt;device name&gt; TTS_RemotePlayerCall GetFileFromURL('http(s)://&lt;remote player&gt;:2323/?cmd=playSound&url=http(s)://&lt;fhem server ip&gt;:&lt;fhem port&gt;/fhem/Text2Speech/&lt;device name&gt;/last.mp3&loop=false&password=&lt;password&gt;')</code><br>
+      <code>attr &lt;device name&gt; TTS_RemotePlayerCall GetFileFromURL('&lt;protocol&gt;://&lt;remote player name or ip&gt;:2323/?cmd=playSound&url=&lt;protocol&gt;://&lt;fhem server name or ip&gt;:&lt;fhem port&gt;/fhem/Text2Speech/&lt;device name&gt;/last.mp3&loop=false&password=&lt;password&gt;')</code><br>
   </li>
 
   <li><a href="#readingFnAttributes">readingFnAttributes</a>
