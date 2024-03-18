@@ -824,7 +824,6 @@ sub Text2Speech_BuildMplayerCmdString($$) {
 
   my $mp3Duration =  Text2Speech_CalcMP3Duration($hash, $file);
   BlockingInformParent("Text2Speech_readingsSingleUpdateByName", [$hash->{NAME}, "duration", "$mp3Duration"], 0);
-  BlockingInformParent("Text2Speech_readingsSingleUpdateByName", [$hash->{NAME}, "endTime", "00:00:00"], 0);
   return $cmd;
 }
 
