@@ -1643,7 +1643,7 @@ the result on a local or remote loudspeaker
   </li>
 
   <a id="Text2Speech-attr-TTS_RemotePlayerCall"></a><li>TTS_RemotePlayerCall<br>
-      The Text2Speech devices provide a URL to the last generated mp3 file:<b>
+      The Text2Speech devices provide a URL to the last generated mp3 file:
       <code>&lt;protocol&gt;://&lt;fhem server ip or name&gt;:&lt;fhem port&gt;/fhem/Text2Speech/&lt;device name&gt;/last.mp3.</code><br>
       If this attibute contains a remote player call, it will be executed after the last mp3 file is generated.<br>
       <code>attr &lt;device name&gt; TTS_RemotePlayerCall GetFileFromURL('&lt;protocol&gt;://&lt;remote player name or ip&gt;:&lt;remote player port&gt;/?cmd=playSound&url=&lt;protocol&gt;://&lt;fhem server name orip&gt;:&lt;fhem port&gt;/fhem/Text2Speech/&lt;device name&gt;/last.mp3&loop=false&password=&lt;password&gt;')</code><br>
